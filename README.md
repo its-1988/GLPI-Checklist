@@ -90,7 +90,6 @@ Définissez un délai sur le modèle. La tâche CRON `checklistOverdue` (horaire
 | 8 | Notifications CRON (tâches en retard) | ✅ |
 | 9 | API REST + tests | ⏳ |
 | 10 | Droits fins par profil | ⏳ |
-| 11 | Logiciel de déploiement PC (client) | 🔮 Futur |
 
 Détail complet dans [PLAN.md](PLAN.md).
 
