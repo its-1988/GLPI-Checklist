@@ -1,4 +1,4 @@
-<div align="center">
+
 
 # GLPI Checklist
 
@@ -66,7 +66,7 @@ glpi/plugins/checklist/
 [![Version](https://img.shields.io/badge/version-1.0.2-success.svg)](CHANGELOG.md)
 [![FR / EN / RU](https://img.shields.io/badge/i18n-FR%20%2F%20EN%20%2F%20RU-informational.svg)](plugin/checklist/locales)
 
-</div>
+
 
 ---
 
