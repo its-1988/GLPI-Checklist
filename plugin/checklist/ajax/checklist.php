@@ -31,6 +31,12 @@ if ($action === 'create') {
         echo json_encode(['success' => false, 'error' => 'Access denied']);
         exit;
     }
+    $parent_entity = PluginChecklistChecklist::getParentEntity($itemtype, $items_id);
+    if (!PluginChecklistTemplate::canUseTemplateForEntity($tpl_id, $parent_entity)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Template not allowed for this entity']);
+        exit;
+    }
     $id = PluginChecklistChecklist::createForItem($itemtype, $items_id, $name, $tpl_id);
     $total = 0;
     if ($id) {

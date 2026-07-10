@@ -31,7 +31,7 @@ function plugin_checklist_install(): bool
                 KEY `name`        (`name`),
                 KEY `entities_id` (`entities_id`),
                 KEY `is_active`   (`is_active`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC",
 
         'glpi_plugin_checklist_templateitems' => "
             CREATE TABLE IF NOT EXISTS `glpi_plugin_checklist_templateitems` (
@@ -46,7 +46,7 @@ function plugin_checklist_install(): bool
                 PRIMARY KEY (`id`),
                 KEY `plugin_checklist_templates_id` (`plugin_checklist_templates_id`),
                 KEY `rank` (`rank`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC",
 
         'glpi_plugin_checklist_checklists' => "
             CREATE TABLE IF NOT EXISTS `glpi_plugin_checklist_checklists` (
@@ -64,7 +64,7 @@ function plugin_checklist_install(): bool
                 KEY `itemtype`    (`itemtype`),
                 KEY `items_id`    (`items_id`),
                 KEY `entities_id` (`entities_id`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC",
 
         'glpi_plugin_checklist_items' => "
             CREATE TABLE IF NOT EXISTS `glpi_plugin_checklist_items` (
@@ -84,7 +84,7 @@ function plugin_checklist_install(): bool
                 PRIMARY KEY (`id`),
                 KEY `plugin_checklist_checklists_id` (`plugin_checklist_checklists_id`),
                 KEY `status` (`status`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC",
 
         'glpi_plugin_checklist_logs' => "
             CREATE TABLE IF NOT EXISTS `glpi_plugin_checklist_logs` (
@@ -100,7 +100,7 @@ function plugin_checklist_install(): bool
                 KEY `plugin_checklist_checklists_id` (`plugin_checklist_checklists_id`),
                 KEY `plugin_checklist_items_id`      (`plugin_checklist_items_id`),
                 KEY `date_action`                    (`date_action`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC",
     ];
 
     foreach ($tables as $table => $sql) {

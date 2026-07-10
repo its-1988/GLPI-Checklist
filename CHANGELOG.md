@@ -10,6 +10,21 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 ### À venir
 - API REST native GLPI + jeu de tests (Phase 9)
 - Droits fins par profil GLPI (Phase 10)
+## [1.0.2] - 2026-07-10
+
+### Ajouté
+- Traduction russe `ru_RU` avec fichiers `.po` et `.mo`.
+- Métadonnées Marketplace en russe (`checklist.xml`).
+
+
+## [1.0.1] - 2026-07-10
+
+### Corrigé
+- Compatibilité GLPI 11: exigence PHP alignée sur 8.2+.
+- Sélection des templates limitée à l'entité de l'élément parent, avec prise en compte de la récursivité.
+- Validation serveur de `templates_id` pour empêcher la réutilisation d'un template hors entité.
+- SortableJS embarqué localement pour supprimer la dépendance CDN à l'exécution.
+- Tables plugin créées avec `ROW_FORMAT=DYNAMIC`, conformément aux conventions GLPI 11.
 
 ## [1.0.0] - 2026-06-10
 

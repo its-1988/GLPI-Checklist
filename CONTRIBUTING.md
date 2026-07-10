@@ -14,7 +14,7 @@ plugin/checklist/
 └── locales/              # Traductions .po / .mo
 ```
 
-> ℹ️ En GLPI 11, le CSS et le JS sont **injectés inline** par `PluginChecklistChecklist::injectAssets()` (le routeur Symfony ne sert pas les assets statiques des plugins dans les onglets dynamiques). Les fichiers `css/checklist.css` et `js/checklist.js` sont volontairement vides.
+> ℹ️ En GLPI 11, le CSS et le JS sont **injectés inline** par `PluginChecklistChecklist::injectAssets()` (le routeur Symfony ne sert pas les assets statiques des plugins dans les onglets dynamiques). Le JS métier reste injecté inline; SortableJS est embarqué localement dans `js/Sortable.min.js` pour éviter toute dépendance CDN.
 
 ## ✅ Avant de soumettre
 

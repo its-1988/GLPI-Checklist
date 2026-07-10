@@ -5,10 +5,10 @@
 **Des checklists opérationnelles intégrées directement dans vos éléments GLPI.**
 
 [![GLPI](https://img.shields.io/badge/GLPI-11.0.x-2c5a8c?logo=glpi&logoColor=white)](https://glpi-project.org)
-[![PHP](https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white)](https://www.php.net)
+[![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?logo=php&logoColor=white)](https://www.php.net)
 [![License](https://img.shields.io/badge/license-GPL%20v3%2B-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-success.svg)](CHANGELOG.md)
-[![FR / EN](https://img.shields.io/badge/i18n-FR%20%2F%20EN-informational.svg)](plugin/checklist/locales)
+[![Version](https://img.shields.io/badge/version-1.0.2-success.svg)](CHANGELOG.md)
+[![FR / EN / RU](https://img.shields.io/badge/i18n-FR%20%2F%20EN%20%2F%20RU-informational.svg)](plugin/checklist/locales)
 
 </div>
 
@@ -32,7 +32,7 @@ Ce plugin ajoute un onglet **Checklists** à n'importe quel élément GLPI (Tick
 - ⏰ **Notifications des tâches en retard** — tâche CRON avec délai configurable par modèle, au choix en **heures / jours / semaines**.
 - 🎫 **Intégration timeline des tickets** — bouton *« Valider une tâche checklist »* + suivi automatique créé quand une tâche est cochée.
 - 🔍 **Sélecteur de modèle avec recherche** à la création d'une checklist.
-- 🌍 **Bilingue FR / EN** dès l'installation.
+- 🌍 **Trilingue FR / EN / RU** dès l'installation.
 - 🔐 **Contrôle d'accès** — chaque action vérifie les droits de l'utilisateur sur l'élément parent (pas d'IDOR).
 
 ---
@@ -42,7 +42,7 @@ Ce plugin ajoute un onglet **Checklists** à n'importe quel élément GLPI (Tick
 | Composant | Version |
 |-----------|---------|
 | GLPI | **11.0.x** |
-| PHP | **8.1+** (testé sur 8.2) |
+| PHP | **8.2+** |
 | Base de données | MariaDB 10.11 / MySQL 8 |
 
 ---

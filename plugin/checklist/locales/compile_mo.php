@@ -47,7 +47,7 @@ function generateMo(array $entries): string {
 }
 
 $dir = __DIR__;
-foreach (['fr_FR', 'en_GB'] as $lang) {
+foreach (['fr_FR', 'en_GB', 'ru_RU'] as $lang) {
     $po_path = "$dir/$lang.po";
     $mo_path = "$dir/$lang.mo";
     if (!file_exists($po_path)) { echo "MISSING: $po_path\n"; continue; }

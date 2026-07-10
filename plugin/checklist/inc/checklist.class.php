@@ -140,10 +140,12 @@ class PluginChecklistChecklist extends CommonDBTM
         @media(max-width:640px){.cl-board{grid-template-columns:1fr}}
         </style>';
 
-        // ── JS (SortableJS CDN + logique plugin) ──────────────────────────────
-        $csrf_token = Session::getNewCSRFToken(true); // standalone = true : token persistant
+        // ── JS (SortableJS local + logique plugin) ────────────────────────────
+        $csrf_token  = Session::getNewCSRFToken(true); // standalone = true : token persistant
+        $sortable_url = Plugin::getWebDir('checklist') . '/js/Sortable.min.js';
         echo '<script id="cl-plugin-scripts">
         // GLPI 11 : CSRF for fetch goes via X-Glpi-Csrf-Token header
+        var clSortableUrl=' . json_encode($sortable_url) . ';
         var clCsrfToken=' . json_encode($csrf_token) . ';
         function clFetch(url, fd) {
             return fetch(url, {
@@ -158,7 +160,7 @@ class PluginChecklistChecklist extends CommonDBTM
         (function(){
             if(typeof Sortable!=="undefined") return;
             var s=document.createElement("script");
-            s.src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js";
+            s.src=clSortableUrl;
             document.head.appendChild(s);
         })();
 
@@ -494,6 +496,7 @@ class PluginChecklistChecklist extends CommonDBTM
         $items_id   = $item->getID();
         $plugin_url = Plugin::getWebDir('checklist');
         $ajax_url   = $plugin_url . '/ajax';
+        $parent_entity = self::getParentEntity($itemtype, $items_id);
 
         // Checklists existantes
         $checklists = [];
@@ -505,7 +508,7 @@ class PluginChecklistChecklist extends CommonDBTM
             $checklists[] = $row;
         }
 
-        $templates = PluginChecklistTemplate::getAll(true);
+        $templates = PluginChecklistTemplate::getVisibleForEntity($parent_entity, true);
 
         // ── Container principal ────────────────────────────────────────────────
         echo '<div class="cl-wrap" id="cl-container">';
@@ -727,17 +730,31 @@ class PluginChecklistChecklist extends CommonDBTM
     //  ACTIONS CRUD
     // ═══════════════════════════════════════════════════════════════════════════
 
+    public static function getParentEntity(string $itemtype, int $items_id): int
+    {
+        $entities_id = (int) Session::getActiveEntity();
+
+        if ($items_id <= 0 || !class_exists($itemtype) || !is_subclass_of($itemtype, CommonDBTM::class)) {
+            return $entities_id;
+        }
+
+        $parent = new $itemtype();
+        if ($parent->getFromDB($items_id) && isset($parent->fields["entities_id"])) {
+            $entities_id = (int) $parent->fields["entities_id"];
+        }
+
+        return $entities_id;
+    }
+
     public static function createForItem(string $itemtype, int $items_id, string $name, int $templates_id = 0): int|false
     {
         global $DB;
 
         // L'entité de la checklist suit celle de son élément parent (pas la session)
-        $entities_id = Session::getActiveEntity();
-        if (class_exists($itemtype) && is_subclass_of($itemtype, CommonDBTM::class)) {
-            $parent = new $itemtype();
-            if ($parent->getFromDB($items_id) && isset($parent->fields['entities_id'])) {
-                $entities_id = (int) $parent->fields['entities_id'];
-            }
+        $entities_id = self::getParentEntity($itemtype, $items_id);
+
+        if (!PluginChecklistTemplate::canUseTemplateForEntity($templates_id, $entities_id)) {
+            return false;
         }
 
         $result = $DB->insert(static::getTable(), [

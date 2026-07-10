@@ -9,6 +9,7 @@
       <short>
          <en>Operational checklists embedded in your GLPI items: reusable templates, Kanban view, automation rules and overdue notifications.</en>
          <fr>Checklists opérationnelles intégrées à vos éléments GLPI : modèles réutilisables, vue Kanban, règles d'automatisation et notifications de retard.</fr>
+         <ru>Операционные чек-листы внутри объектов GLPI: многоразовые шаблоны, Kanban, правила автоматизации и уведомления о просрочках.</ru>
       </short>
       <long>
          <en>
@@ -23,7 +24,7 @@ The Checklist plugin adds a **Checklists** tab to any GLPI item (Tickets, Comput
 - **GLPI rules engine** to automatically assign a template based on item type, title, ITIL category…
 - **Overdue notifications** via a CRON task, with a delay configurable per template in **hours / days / weeks**
 - Ticket **timeline integration**: "Validate a checklist task" button + automatic follow-up when a task is completed
-- Searchable template picker, **FR / EN** translations
+- Searchable template picker, **FR / EN / RU** translations
 - Access control on every AJAX endpoint (no IDOR)
          </en>
          <fr>
@@ -38,9 +39,24 @@ Le plugin Checklist ajoute un onglet **Checklists** à n'importe quel élément 
 - **Moteur de règles GLPI** pour associer automatiquement un modèle selon le type d'élément, le titre, la catégorie ITIL…
 - **Notifications des tâches en retard** via une tâche CRON, délai configurable par modèle en **heures / jours / semaines**
 - **Intégration timeline** des tickets : bouton « Valider une tâche checklist » + suivi automatique à la complétion d'une tâche
-- Sélecteur de modèle avec recherche, traductions **FR / EN**
+- Sélecteur de modèle avec recherche, traductions **FR / EN / RU**
 - Contrôle d'accès sur chaque endpoint AJAX (anti-IDOR)
          </fr>
+         <ru>
+Плагин Checklist добавляет вкладку **Чек-листы** к объектам GLPI (заявкам, компьютерам, телефонам и другим).
+
+**Возможности**
+- Многоразовые **шаблоны** чек-листов с задачами и привязкой к сущностям
+- Kanban-представление «К выполнению» / «Выполнено» с кликом и drag & drop
+- Несколько чек-листов на один объект с индикатором прогресса
+- **Особые** разовые задачи, отдельные от задач шаблона
+- Журнал действий по каждому чек-листу
+- Правила GLPI для автоматического назначения шаблона по типу, названию, категории ITIL и другим полям
+- Уведомления о просроченных задачах через CRON
+- Интеграция с timeline заявок: кнопка подтверждения задачи и автоматический follow-up
+- Поиск шаблона при создании, переводы **FR / EN / RU**
+- Проверка прав на каждом AJAX endpoint
+         </ru>
       </long>
    </description>
    <homepage>https://github.com/aprolex/GLPI-Checklist</homepage>
@@ -53,14 +69,15 @@ Le plugin Checklist ajoute un onglet **Checklists** à n'importe quel élément 
    </authors>
    <versions>
       <version>
-         <num>1.0.0</num>
+         <num>1.0.2</num>
          <compatibility>~11.0</compatibility>
-         <download_url>https://github.com/aprolex/GLPI-Checklist/releases/download/v1.0.0/checklist-1.0.0.zip</download_url>
+         <download_url>https://github.com/aprolex/GLPI-Checklist/releases/download/v1.0.2/checklist-1.0.2.zip</download_url>
       </version>
    </versions>
    <langs>
       <lang>en_GB</lang>
       <lang>fr_FR</lang>
+      <lang>ru_RU</lang>
    </langs>
    <license>GPL v3+</license>
    <tags>
@@ -78,6 +95,13 @@ Le plugin Checklist ajoute un onglet **Checklists** à n'importe quel élément 
          <tag>workflow</tag>
          <tag>productivité</tag>
       </fr>
+      <ru>
+         <tag>чек-лист</tag>
+         <tag>задачи</tag>
+         <tag>kanban</tag>
+         <tag>процесс</tag>
+         <tag>продуктивность</tag>
+      </ru>
    </tags>
    <!-- Captures d'écran : remplace par de vraies images hébergées, ou supprime ce bloc -->
    <screenshots>

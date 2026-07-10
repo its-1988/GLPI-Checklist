@@ -1,0 +1,196 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Plugin GLPI Checklist 1.0.2\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-09\n"
+"PO-Revision-Date: 2026-07-10\n"
+"Language: ru_RU\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Checklist"
+msgstr "Чек-лист"
+
+msgid "Checklists"
+msgstr "Чек-листы"
+
+msgid "Checklist template"
+msgstr "Шаблон чек-листа"
+
+msgid "Checklist templates"
+msgstr "Шаблоны чек-листов"
+
+msgid "Template item"
+msgstr "Задача шаблона"
+
+msgid "Template items"
+msgstr "Задачи шаблона"
+
+msgid "Checklist item"
+msgstr "Задача"
+
+msgid "Checklist items"
+msgstr "Задачи"
+
+msgid "Checklist log"
+msgstr "Журнал чек-листа"
+
+msgid "Checklist logs"
+msgstr "Журналы чек-листов"
+
+msgid "New checklist"
+msgstr "Новый чек-лист"
+
+msgid "From template"
+msgstr "Из шаблона"
+
+msgid "Empty checklist"
+msgstr "Пустой чек-лист"
+
+msgid "Create"
+msgstr "Создать"
+
+msgid "Add a template"
+msgstr "Добавить шаблон"
+
+msgid "New template"
+msgstr "Новый шаблон"
+
+msgid "Edit checklist template"
+msgstr "Изменить шаблон чек-листа"
+
+msgid "New checklist template"
+msgstr "Новый шаблон чек-листа"
+
+msgid "Active"
+msgstr "Активно"
+
+msgid "Notification delay (hours)"
+msgstr "Задержка уведомления (часы)"
+
+msgid "0 = disabled"
+msgstr "0 = отключено"
+
+msgid "Tasks"
+msgstr "Задачи"
+
+msgid "Task name"
+msgstr "Название задачи"
+
+msgid "Rank"
+msgstr "Порядок"
+
+msgid "Exceptional"
+msgstr "Особая"
+
+msgid "Exceptional task"
+msgstr "Особая задача"
+
+msgid "Add exceptional task"
+msgstr "Добавить особую задачу"
+
+msgid "No task yet."
+msgstr "Пока нет задач."
+
+msgid "No template yet. Create one!"
+msgstr "Шаблонов пока нет. Создайте первый!"
+
+msgid "No checklist yet. Click «+ New checklist» to start."
+msgstr "Чек-листов пока нет. Нажмите «+ Новый чек-лист», чтобы начать."
+
+msgid "To do"
+msgstr "К выполнению"
+
+msgid "Done"
+msgstr "Выполнено"
+
+msgid "History"
+msgstr "История"
+
+msgid "No history yet."
+msgstr "Истории пока нет."
+
+msgid "Action"
+msgstr "Действие"
+
+msgid "marked as done"
+msgstr "отметил задачу как выполненную"
+
+msgid "moved back to to-do"
+msgstr "вернул задачу в «К выполнению»"
+
+msgid "created task"
+msgstr "создал задачу"
+
+msgid "deleted task"
+msgstr "удалил задачу"
+
+msgid "reordered tasks"
+msgstr "изменил порядок задач"
+
+msgid "added exceptional task"
+msgstr "добавил особую задачу"
+
+msgid "e.g. Onboarding SIRH"
+msgstr "напр. онбординг HR"
+
+msgid "Validate a checklist task"
+msgstr "Подтвердить задачу чек-листа"
+
+msgid "Validate checklist tasks"
+msgstr "Подтвердить задачи чек-листа"
+
+msgid "Validate selected"
+msgstr "Подтвердить выбранные"
+
+msgid "All tasks are already done!"
+msgstr "Все задачи уже выполнены!"
+
+msgid "Loading error."
+msgstr "Ошибка загрузки."
+
+msgid "An error occurred."
+msgstr "Произошла ошибка."
+
+msgid "Manage checklist templates"
+msgstr "Управление шаблонами чек-листов"
+
+msgid "Checklist assignment rules"
+msgstr "Правила назначения чек-листов"
+
+msgid "Title / Name"
+msgstr "Заголовок / Название"
+
+msgid "Assign checklist template"
+msgstr "Назначить шаблон чек-листа"
+
+msgid "Notification delay"
+msgstr "Задержка уведомления"
+
+msgid "Hours"
+msgstr "Часы"
+
+msgid "Days"
+msgstr "Дни"
+
+msgid "Weeks"
+msgstr "Недели"
+
+msgid "Send notifications for overdue checklist tasks"
+msgstr "Отправлять уведомления о просроченных задачах чек-листа"
+
+msgid "overdue notification sent"
+msgstr "уведомление о просрочке отправлено"
+
+msgid "⏰ Overdue checklist task: «%1$s» (checklist «%2$s») has been pending for more than %3$d hour(s)."
+msgstr "⏰ Просроченная задача чек-листа: «%1$s» (чек-лист «%2$s») ожидает выполнения более %3$d ч."
+
+msgid "Child entities"
+msgstr "Дочерние сущности"
+
+msgid "Search a template…"
+msgstr "Найти шаблон…"
+
+msgid "No matching template"
+msgstr "Подходящих шаблонов нет"

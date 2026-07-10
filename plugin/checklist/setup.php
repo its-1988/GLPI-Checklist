@@ -6,9 +6,9 @@
 
 declare(strict_types=1);
 
-define('PLUGIN_CHECKLIST_VERSION', '1.0.0');
+define('PLUGIN_CHECKLIST_VERSION', '1.0.2');
 define('PLUGIN_CHECKLIST_MIN_GLPI', '11.0.0');
-define('PLUGIN_CHECKLIST_MAX_GLPI', '12.0.99');
+define('PLUGIN_CHECKLIST_MAX_GLPI', '11.0.99');
 define('PLUGIN_CHECKLIST_DIR', __DIR__);
 
 function plugin_version_checklist(): array
@@ -24,7 +24,7 @@ function plugin_version_checklist(): array
                 'min' => PLUGIN_CHECKLIST_MIN_GLPI,
                 'max' => PLUGIN_CHECKLIST_MAX_GLPI,
             ],
-            'php'  => ['min' => '8.1'],
+            'php'  => ['min' => '8.2'],
         ],
     ];
 }
@@ -38,13 +38,15 @@ function plugin_init_checklist(): void
 {
     global $PLUGIN_HOOKS;
 
-    $PLUGIN_HOOKS['csrf_compliant']['checklist']  = true;
+    $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::CSRF_COMPLIANT]['checklist']  = true;
     $PLUGIN_HOOKS['use_language']['checklist']    = true;
-    $PLUGIN_HOOKS['timeline_actions']['checklist'] = 'plugin_checklist_timeline_actions';
+    $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::TIMELINE_ACTIONS]['checklist'] = 'plugin_checklist_timeline_actions';
 
     if (!Plugin::isPluginActive('checklist')) {
         return;
     }
+
+    $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ADD_JAVASCRIPT]['checklist'][] = 'js/Sortable.min.js';
 
     // Itemtypes sur lesquels on affiche l'onglet Checklist
     $itemtypes = [
@@ -65,13 +67,13 @@ function plugin_init_checklist(): void
 
     // Déclenche l'évaluation des règles à la création / modification d'un élément
     foreach ($itemtypes as $type) {
-        $PLUGIN_HOOKS['item_add']['checklist'][$type]    = 'plugin_checklist_item_add';
-        $PLUGIN_HOOKS['item_update']['checklist'][$type] = 'plugin_checklist_item_update';
+        $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_ADD]['checklist'][$type]    = 'plugin_checklist_item_add';
+        $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::ITEM_UPDATE]['checklist'][$type] = 'plugin_checklist_item_update';
     }
 
     // Entrée de menu sous Configuration
-    $PLUGIN_HOOKS['menu_toadd']['checklist'] = ['config' => 'PluginChecklistTemplate'];
+    $PLUGIN_HOOKS[\Glpi\Plugin\Hooks::MENU_TOADD]['checklist'] = ['config' => 'PluginChecklistTemplate'];
 
-    // CSS et JS injectés inline par PluginChecklistChecklist::injectAssets()
-    // pour garantir leur chargement dans les onglets dynamiques de GLPI 11.
+    // Le JS métier reste injecté inline pour les onglets dynamiques GLPI 11.
+    // SortableJS est embarqué localement pour éviter toute dépendance CDN.
 }

@@ -63,8 +63,10 @@ class PluginChecklistRuleChecklistCollection extends RuleCollection
         $input = $item->fields;
         $input['_itemtype'] = $itemtype;
 
+        $entity_id = (int) ($item->fields['entities_id'] ?? Session::getActiveEntity());
+
         $collection = new self();
-        $collection->setEntity($item->fields['entities_id'] ?? 0);
+        $collection->setEntity($entity_id);
 
         $output = $collection->processAllRules($input, [], [], [
             'condition' => $condition,
@@ -94,7 +96,8 @@ class PluginChecklistRuleChecklistCollection extends RuleCollection
             }
 
             $template = new PluginChecklistTemplate();
-            if (!$template->getFromDB($tpl_id) || !$template->fields['is_active']) {
+            if (!$template->getFromDB($tpl_id) || !$template->fields['is_active']
+                || !PluginChecklistTemplate::canUseTemplateForEntity($tpl_id, $entity_id)) {
                 continue;
             }
 

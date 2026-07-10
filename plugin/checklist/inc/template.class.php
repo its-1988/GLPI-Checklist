@@ -64,19 +64,97 @@ class PluginChecklistTemplate extends CommonDBTM
 
     // ─── Récupération ─────────────────────────────────────────────────────────
 
-    public static function getAll(bool $active_only = true): array
+    public static function getAll(bool $active_only = true, ?int $entity_id = null): array
     {
         global $DB;
 
-        $where    = $active_only ? ['is_active' => 1] : [];
+        $entity_id ??= (int) Session::getActiveEntity();
+        $where    = $active_only ? ["is_active" => 1] : [];
         $items    = [];
-        $iterator = $DB->request(['FROM' => static::getTable(), 'WHERE' => $where, 'ORDER' => ['name ASC']]);
+        $iterator = $DB->request(["FROM" => static::getTable(), "WHERE" => $where, "ORDER" => ["name ASC"]]);
 
         foreach ($iterator as $row) {
-            $items[] = $row;
+            if (self::isVisibleInEntity($row, $entity_id)) {
+                $items[] = $row;
+            }
         }
 
         return $items;
+    }
+
+    public static function getVisibleForEntity(int $entity_id, bool $active_only = true): array
+    {
+        return self::getAll($active_only, $entity_id);
+    }
+
+    public static function canUseTemplateForEntity(int $templates_id, int $entity_id): bool
+    {
+        if ($templates_id <= 0) {
+            return true;
+        }
+
+        global $DB;
+
+        $row = $DB->request([
+            "FROM"  => static::getTable(),
+            "WHERE" => ["id" => $templates_id],
+        ])->current();
+
+        if (!$row || !(int) ($row["is_active"] ?? 0)) {
+            return false;
+        }
+
+        return self::isVisibleInEntity($row, $entity_id);
+    }
+
+    private static function isVisibleInEntity(array $template, int $entity_id): bool
+    {
+        $template_entity = (int) ($template["entities_id"] ?? 0);
+        if ($template_entity === $entity_id) {
+            return true;
+        }
+
+        if (!(int) ($template["is_recursive"] ?? 0)) {
+            return false;
+        }
+
+        if ($template_entity === 0) {
+            return true;
+        }
+
+        return self::isEntityAncestorOf($template_entity, $entity_id);
+    }
+
+    private static function isEntityAncestorOf(int $ancestor_id, int $entity_id): bool
+    {
+        global $DB;
+
+        $current = $entity_id;
+        $guard   = 0;
+
+        while ($current > 0 && $guard++ < 100) {
+            $row = $DB->request([
+                "SELECT" => ["entities_id"],
+                "FROM"   => "glpi_entities",
+                "WHERE"  => ["id" => $current],
+            ])->current();
+
+            if (!$row) {
+                return false;
+            }
+
+            $parent = (int) ($row["entities_id"] ?? 0);
+            if ($parent === $ancestor_id) {
+                return true;
+            }
+            if ($parent === $current) {
+                return false;
+            }
+
+            $current = $parent;
+        }
+
+        return false;
     }
 
     // ─── Affichage liste ──────────────────────────────────────────────────────
@@ -292,17 +370,19 @@ class PluginChecklistTemplate extends CommonDBTM
     private static function renderReorderScript(): void
     {
         $csrf = Session::getNewCSRFToken(true);
+        $sortable_url = Plugin::getWebDir('checklist') . '/js/Sortable.min.js';
 
         echo '<script>
         (function(){
             var tbody=document.getElementById("cl-tpl-sortable");
             if(!tbody||tbody._init) return; tbody._init=true;
+            var sortableUrl=' . json_encode($sortable_url) . ';
             var csrf=' . json_encode($csrf) . ';
 
             function loadSortable(cb){
                 if(typeof Sortable!=="undefined"){cb();return;}
                 var s=document.createElement("script");
-                s.src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js";
+                s.src=sortableUrl;
                 s.onload=cb; document.head.appendChild(s);
             }
 
