@@ -1,0 +1,393 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Plugin GLPI Checklist 1.0.2\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-09\n"
+"PO-Revision-Date: 2026-07-21\n"
+"Language: ru_RU\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+msgid "Checklist"
+msgid_plural "Checklists"
+msgstr[0] "Чек-лист"
+msgstr[1] "Чек-листа"
+msgstr[2] "Чек-листов"
+
+msgid "Checklist template"
+msgid_plural "Checklist templates"
+msgstr[0] "Шаблон чек-листа"
+msgstr[1] "Шаблона чек-листа"
+msgstr[2] "Шаблонов чек-листов"
+
+msgid "Template item"
+msgid_plural "Template items"
+msgstr[0] "Задача шаблона"
+msgstr[1] "Задачи шаблона"
+msgstr[2] "Задач шаблона"
+
+msgid "Checklist item"
+msgid_plural "Checklist items"
+msgstr[0] "Задача"
+msgstr[1] "Задачи"
+msgstr[2] "Задач"
+
+msgid "New checklist"
+msgstr "Новый чек-лист"
+
+msgid "From template"
+msgstr "Из шаблона"
+
+msgid "Empty checklist"
+msgstr "Пустой чек-лист"
+
+msgid "Create"
+msgstr "Создать"
+
+msgid "Add a template"
+msgstr "Добавить шаблон"
+
+msgid "New template"
+msgstr "Новый шаблон"
+
+msgid "Edit checklist template"
+msgstr "Изменить шаблон чек-листа"
+
+msgid "New checklist template"
+msgstr "Новый шаблон чек-листа"
+
+msgid "Active"
+msgstr "Активно"
+
+msgid "0 = disabled"
+msgstr "0 = отключено"
+
+msgid "Tasks"
+msgstr "Задачи"
+
+msgid "Task name"
+msgstr "Название задачи"
+
+msgid "Rank"
+msgstr "Порядок"
+
+msgid "Exceptional"
+msgstr "Особая"
+
+msgid "Add exceptional task"
+msgstr "Добавить особую задачу"
+
+msgid "No task yet."
+msgstr "Пока нет задач."
+
+msgid "No template yet. Create one!"
+msgstr "Шаблонов пока нет. Создайте первый!"
+
+msgid "No checklist yet. Click «+ New checklist» to start."
+msgstr "Чек-листов пока нет. Нажмите «+ Новый чек-лист», чтобы начать."
+
+msgid "To do"
+msgstr "К выполнению"
+
+msgid "Done"
+msgstr "Выполнено"
+
+msgid "History"
+msgstr "История"
+
+msgid "No history yet."
+msgstr "Истории пока нет."
+
+msgid "marked as done"
+msgstr "отметил задачу как выполненную"
+
+msgid "moved back to to-do"
+msgstr "вернул задачу в «К выполнению»"
+
+msgid "created task"
+msgstr "создал задачу"
+
+msgid "deleted task"
+msgstr "удалил задачу"
+
+msgid "reordered tasks"
+msgstr "изменил порядок задач"
+
+msgid "added exceptional task"
+msgstr "добавил особую задачу"
+
+msgid "e.g. Onboarding SIRH"
+msgstr "напр. онбординг HR"
+
+msgid "Validate a checklist task"
+msgstr "Подтвердить задачу чек-листа"
+
+msgid "Validate checklist tasks"
+msgstr "Подтвердить задачи чек-листа"
+
+msgid "Validate selected"
+msgstr "Подтвердить выбранные"
+
+msgid "All tasks are already done!"
+msgstr "Все задачи уже выполнены!"
+
+msgid "Loading error."
+msgstr "Ошибка загрузки."
+
+msgid "An error occurred."
+msgstr "Произошла ошибка."
+
+msgid "Manage checklist templates"
+msgstr "Управление шаблонами чек-листов"
+
+msgid "Checklist assignment rules"
+msgstr "Правила назначения чек-листов"
+
+msgid "Title / Name"
+msgstr "Заголовок / Название"
+
+msgid "Assign checklist template"
+msgstr "Назначить шаблон чек-листа"
+
+msgid "Notification delay"
+msgstr "Задержка уведомления"
+
+msgid "Hours"
+msgstr "Часы"
+
+msgid "Days"
+msgstr "Дни"
+
+msgid "Weeks"
+msgstr "Недели"
+
+msgid "Send notifications for overdue checklist tasks"
+msgstr "Отправлять уведомления о просроченных задачах чек-листа"
+
+msgid "overdue notification sent"
+msgstr "уведомление о просрочке отправлено"
+
+# Messages written into the parent ITIL object (Ticket / Change / Problem).
+msgid "✅ Task «%1$s» validated via checklist «%2$s»."
+msgstr "✅ Задача «%1$s» выполнена по чек-листу «%2$s»."
+
+msgid "⏰ Overdue checklist task: «%1$s» (checklist «%2$s») has been pending for more than %3$s."
+msgstr "⏰ Просроченная задача чек-листа: «%1$s» (чек-лист «%2$s») ожидает выполнения более %3$s."
+
+msgid "Notifications for overdue checklist tasks"
+msgstr "Уведомления о просроченных задачах чек-листов"
+
+msgid "Child entities"
+msgstr "Дочерние сущности"
+
+msgid "Search a template…"
+msgstr "Найти шаблон…"
+
+msgid "No matching template"
+msgstr "Подходящих шаблонов нет"
+
+msgid "Checklists on tickets/assets"
+msgstr "Чек-листы в заявках/объектах"
+
+# Standalone (non-plural) lookups: the code calls __('Checklists', 'checklist')
+# and __('Checklist templates', 'checklist') as fixed UI labels. A gettext
+# singular lookup never matches a msgid_plural key, so these need own entries.
+msgid "Checklists"
+msgstr "Чек-листы"
+
+msgid "Checklist templates"
+msgstr "Шаблоны чек-листов"
+
+msgid "Delete this template?"
+msgstr "Удалить этот шаблон?"
+
+msgid "Delete?"
+msgstr "Удалить?"
+
+msgid "optional"
+msgstr "необязательно"
+
+# Client-side strings drawn by public/js/checklist.js (GLPI ships the plugin
+# .mo to the browser, so these resolve through the native __()/_n()).
+msgid "%d checklist"
+msgid_plural "%d checklists"
+msgstr[0] "%d чек-лист"
+msgstr[1] "%d чек-листа"
+msgstr[2] "%d чек-листов"
+
+msgid "Delete this checklist and all its tasks?"
+msgstr "Удалить этот чек-лист и все его задачи?"
+
+msgid "Deletion failed."
+msgstr "Не удалось удалить."
+
+msgid "Exceptional task name:"
+msgstr "Название особой задачи:"
+
+msgid "Description (optional):"
+msgstr "Описание (необязательно):"
+
+msgid "⚠ EXC"
+msgstr "⚠ ОСОБ"
+
+msgid "Checklist setup"
+msgstr "Настройка чек-листов"
+
+# Global settings page (front/config.form.php → PluginChecklistConfig::showConfigForm).
+msgid "When a checklist item is completed"
+msgstr "Когда задача чек-листа выполнена"
+
+msgid "When a checklist task is overdue"
+msgstr "Когда задача чек-листа просрочена"
+
+msgid "General"
+msgstr "Общие"
+
+msgid "Add a followup to the ticket"
+msgstr "Добавлять наблюдение в заявку"
+
+msgid "Followup visibility"
+msgstr "Видимость наблюдения"
+
+msgid "Send a notification"
+msgstr "Отправлять уведомление"
+
+msgid "As in GLPI"
+msgstr "Как в GLPI"
+
+msgid "Public"
+msgstr "Публичное"
+
+msgid "Private"
+msgstr "Приватное"
+
+msgid "«As in GLPI» follows each technician's own followup privacy preference."
+msgstr "«Как в GLPI» — использовать личную настройку приватности наблюдений каждого техника."
+
+msgid "Group bulk validations into a single followup"
+msgstr "Объединять массовое подтверждение в одно наблюдение"
+
+msgid "Item types"
+msgstr "Типы объектов"
+
+msgid "Setup updated"
+msgstr "Настройки обновлены"
+
+# Per-template overrides (PluginChecklistTemplate::showForm).
+msgid "Notifications"
+msgstr "Уведомления"
+
+msgid "Inherit global setting"
+msgstr "Наследовать общую настройку"
+
+# Aggregated bulk validation (PluginChecklistItem::addBatchFollowup) — ONE
+# summary followup for the whole selection instead of one message per item.
+msgid "✅ %d checklist task validated:"
+msgid_plural "✅ %d checklist tasks validated:"
+msgstr[0] "✅ Подтверждена %d задача чек-листа:"
+msgstr[1] "✅ Подтверждено %d задачи чек-листа:"
+msgstr[2] "✅ Подтверждено %d задач чек-листа:"
+
+# Batch endpoint errors (ajax/validate_items.php).
+msgid "Access denied"
+msgstr "Доступ запрещён"
+
+msgid "Item not found"
+msgstr "Задача не найдена"
+
+msgid "Missing item_ids"
+msgstr "Не переданы item_ids"
+
+# Blocking switch (PluginChecklistTemplate::showForm) — mirrored onto every
+# checklist created from the template; the solve/close veto reads it there.
+msgid "Block solving/closing while tasks remain"
+msgstr "Блокировать решение/закрытие, пока есть невыполненные задачи"
+
+msgid "Applies to checklists created from this template. Ad-hoc checklists never block."
+msgstr "Применяется к чек-листам, созданным по этому шаблону. Произвольные чек-листы никогда не блокируют."
+
+# Search-option labels (rawSearchOptions() on the four plugin itemtypes).
+# These are generic column headings shown in the search engine, the column
+# picker and CSV/PDF exports.
+msgid "Percent done"
+msgstr "Прогресс"
+
+msgid "Status"
+msgstr "Статус"
+
+msgid "Blocking"
+msgstr "Блокирующий"
+
+msgid "Total tasks"
+msgstr "Всего задач"
+
+msgid "Completed tasks"
+msgstr "Выполнено задач"
+
+msgid "Creation date"
+msgstr "Дата создания"
+
+msgid "Due date"
+msgstr "Срок выполнения"
+
+msgid "Apply a checklist template"
+msgstr "Применить шаблон чек-листа"
+
+msgid "No template selected"
+msgstr "Шаблон не выбран"
+
+msgid "Block solving/closing when a blocking checklist has open tasks"
+msgstr "Запрещать решение/закрытие, пока в блокирующем чек-листе есть открытые задачи"
+
+msgid "Applies to every ticket, change and problem in this GLPI, not only to those using a checklist template. Disabled by default; the automatic closing CRON is refused too and records a private followup instead."
+msgstr "Действует для всех заявок, изменений и проблем в этой GLPI, а не только для использующих шаблон чек-листа. По умолчанию выключено; задание автозакрытия CRON также отклоняется и вместо этого записывает приватное наблюдение."
+
+msgid "This item cannot be solved or closed: %d blocking checklist task is still open."
+msgid_plural "This item cannot be solved or closed: %d blocking checklist tasks are still open."
+msgstr[0] "Объект нельзя решить или закрыть: осталась %d незакрытая блокирующая задача чек-листа."
+msgstr[1] "Объект нельзя решить или закрыть: осталось %d незакрытые блокирующие задачи чек-листа."
+msgstr[2] "Объект нельзя решить или закрыть: осталось %d незакрытых блокирующих задач чек-листа."
+
+msgid "Remaining: %s"
+msgstr "Осталось: %s"
+
+msgid "Automatic closing was cancelled."
+msgstr "Автоматическое закрытие отменено."
+
+msgid "Checklist completed"
+msgstr "Чек-лист выполнен"
+
+msgid "Send a GLPI notification when a checklist is completed"
+msgstr "Отправлять уведомление GLPI при выполнении чек-листа"
+
+msgid "A second, independent channel: the followup written into the timeline is unaffected. Wording, recipients and per-language text are editable in Setup > Notifications («Checklist completed»). Disabled by default so that upgrading never starts sending mail on its own."
+msgstr "Второй, независимый канал: наблюдение, записываемое в ленту, не затрагивается. Текст, получателей и перевод по языкам можно изменить в «Настройки > Уведомления» («Чек-лист выполнен»). По умолчанию выключено, чтобы обновление плагина само по себе не начало рассылать почту."
+
+msgid "Author of the checklist"
+msgstr "Автор чек-листа"
+
+msgid "Checklist ID"
+msgstr "Идентификатор чек-листа"
+
+msgid "Checklist name"
+msgstr "Название чек-листа"
+
+msgid "Event"
+msgstr "Событие"
+
+msgid "Item type"
+msgstr "Тип объекта"
+
+msgid "Related item"
+msgstr "Связанный объект"
+
+msgid "Completion date"
+msgstr "Дата выполнения"
+
+msgid "Entity"
+msgstr "Организация"
+
+msgid "Link to the related item"
+msgstr "Ссылка на связанный объект"
