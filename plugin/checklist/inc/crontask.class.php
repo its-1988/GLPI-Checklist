@@ -79,6 +79,7 @@ class PluginChecklistCronTask extends CommonDBTM
                 "$cl_table.items_id",
                 "$tpl_table.notification_delay_hours AS delay_value",
                 "$tpl_table.notification_delay_unit AS delay_unit",
+                "$cl_table.plugin_checklist_templates_id AS templates_id",
             ],
             'FROM'       => $it_table,
             'INNER JOIN' => [
@@ -136,36 +137,41 @@ class PluginChecklistCronTask extends CommonDBTM
     }
 
     /**
-     * Émet la notification pour une tâche en retard.
-     * - Checklist sur un Ticket : ajoute un suivi privé (déclenche les notifications GLPI du ticket)
-     * - Tous types : écrit une entrée dans l'historique de la checklist
+     * Emit the notification for an overdue task: on an ITIL object, a message
+     * written by the settings-aware service (the per-template override wins
+     * over the global setting). A checklist carried by an asset produces none.
      */
     private static function notifyOverdue(array $row, int $delay_hours): void
     {
-        if ($row['itemtype'] === 'Ticket' && (int) $row['items_id'] > 0 && class_exists('ITILFollowup')) {
-            $content = sprintf(
-                __('⏰ Overdue checklist task: «%1$s» (checklist «%2$s») has been pending for more than %3$d hour(s).', 'checklist'),
-                $row['item_name'],
-                $row['cl_name'],
-                $delay_hours
-            );
-
-            $fup = new ITILFollowup();
-            $fup->add([
-                'itemtype'   => 'Ticket',
-                'items_id'   => (int) $row['items_id'],
-                'content'    => $content,
-                'is_private' => 1,
-                'users_id'   => Session::getLoginUserID() ?: 0,
-            ]);
+        $global   = PluginChecklistConfig::get();
+        $template = [];
+        if ((int) ($row['templates_id'] ?? 0) > 0) {
+            global $DB;
+            $template = $DB->request([
+                'FROM'  => PluginChecklistTemplate::getTable(),
+                'WHERE' => ['id' => (int) $row['templates_id']],
+            ])->current() ?: [];
         }
 
-        PluginChecklistLog::addEntry(
-            (int) $row['cl_id'],
-            (int) $row['item_id'],
-            'overdue_notified',
-            null,
-            ['name' => $row['item_name']]
-        );
+        if ((int) PluginChecklistConfig::resolve('followup_on_overdue', $template, $global) === 1) {
+            $unit_labels = self::getUnitLabels();
+            $delay_value = (int) $row['delay_value'];
+            $delay_unit  = $row['delay_unit'] ?: 'hours';
+
+            $content = sprintf(
+                __('⏰ Overdue checklist task: «%1$s» (checklist «%2$s») has been pending for more than %3$s.', 'checklist'),
+                $row['item_name'],
+                $row['cl_name'],
+                $delay_value . ' ' . mb_strtolower($unit_labels[$delay_unit] ?? $delay_unit, 'UTF-8')
+            );
+
+            PluginChecklistFollowup::post(
+                (string) $row['itemtype'],
+                (int) $row['items_id'],
+                $content,
+                (string) PluginChecklistConfig::resolve('overdue_privacy', $template, $global),
+                (int) PluginChecklistConfig::resolve('notify_on_overdue', $template, $global) === 1
+            );
+        }
     }
 }

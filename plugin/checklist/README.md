@@ -1,26 +1,54 @@
-# Plugin Checklist — GLPI 11
+# GLPI Checklist
 
-Dossier source du plugin. Pour l'installer, copiez **ce dossier** (`checklist/`) dans le répertoire `plugins/` de votre GLPI :
+Короткий плагин для GLPI 11, который добавляет чек-листы к заявкам и другим объектам GLPI.
 
-```
+## Возможности
+
+- чек-листы во вкладке объекта GLPI;
+- шаблоны чек-листов с задачами;
+- Kanban-вид «К выполнению» / «Выполнено»;
+- особые разовые задачи;
+- журнал действий;
+- автоматическое назначение шаблонов через правила GLPI;
+- уведомления о просроченных задачах через CRON;
+- переводы: французский, английский, русский.
+
+## Совместимость
+
+- GLPI: 11.0.x
+- PHP: 8.2+
+- БД: MariaDB 10.6+ или MySQL 8.0+
+
+## Установка
+
+1. Распакуйте архив так, чтобы папка плагина называлась `checklist`.
+2. Скопируйте папку в каталог GLPI:
+
+```bash
 glpi/plugins/checklist/
 ```
 
-Puis, dans GLPI : **Configuration › Plugins** → **Checklist** → Installer → Activer.
+3. В GLPI откройте `Настройка -> Плагины`.
+4. Установите и активируйте плагин `Checklist`.
+5. При необходимости проверьте автоматическое действие `checklistOverdue` в настройках CRON GLPI.
 
-> Le dossier doit impérativement s'appeler `checklist` (clé du plugin).
+## Использование
 
-## Contenu
+- Шаблоны: `Настройка -> Шаблоны чек-листов`.
+- На объекте GLPI: откройте заявку или устройство, затем вкладку `Чек-листы`.
+- Правила назначения: `Администрирование -> Правила`.
 
-| Dossier | Rôle |
-|---------|------|
-| `setup.php` | Déclaration du plugin, hooks d'initialisation |
-| `hook.php` | Installation/désinstallation, CRON, timeline, déclenchement des règles |
-| `inc/` | Classes métier (checklist, item, template, log, rule, crontask) |
-| `front/` | Pages liste et formulaires |
-| `ajax/` | Endpoints AJAX (Kanban, création, réordonnancement…) |
-| `locales/` | Traductions FR / EN (`.po` source + `.mo` compilés) |
+## Состав
 
-Documentation complète, environnement de dev et contribution : voir le [README principal](../../README.md) et [CONTRIBUTING.md](../../CONTRIBUTING.md).
+- `setup.php` - описание плагина и hooks GLPI;
+- `hook.php` - установка, удаление, CRON и обработчики событий;
+- `inc/` - основные классы плагина;
+- `front/` - страницы управления;
+- `ajax/` - AJAX endpoints;
+- `locales/` - переводы `.po` и `.mo`.
 
-Licence : **GPL v3+**.
+## Примечания
+
+Плагин проверяет права пользователя на родительский объект GLPI перед AJAX-действиями. SortableJS включен локально, без зависимости от CDN.
+
+Лицензия: GPL v3+.

@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 class PluginChecklistTemplate extends CommonDBTM
 {
-    public static $rightname = 'config';
+    public static $rightname = 'plugin_checklist_template';
 
     public static function getTypeName($nb = 0): string
     {
@@ -24,6 +24,91 @@ class PluginChecklistTemplate extends CommonDBTM
         return 'glpi_plugin_checklist_templates';
     }
 
+    /**
+     * Options de recherche natives — voir PluginChecklistChecklist::rawSearchOptions()
+     * pour le détail du contrat (`searchOptions()` est `final`, liste plate, `id`
+     * et `name` obligatoires, objet instancié vide).
+     *
+     * Les pages maison (`showList()` / `showForm()`) restent en place : elles ne
+     * sont PAS migrées vers `Search::show()`. Ces options sont un ajout pur, qui
+     * sert la recherche, l'export et l'API REST.
+     */
+    public function rawSearchOptions()
+    {
+        // La table porte `is_recursive` : la base contribue l'option 86 « Entités
+        // filles », qu'on laisse passer. Seul l'`id => 1` par défaut est retiré
+        // pour être redéfini sans doublon (E_USER_WARNING sinon).
+        $tab = array_values(array_filter(
+            parent::rawSearchOptions(),
+            static fn(array $opt): bool => (string) ($opt['id'] ?? '') !== '1'
+        ));
+
+        $tab[] = [
+            'id'            => '1',
+            'table'         => self::getTable(),
+            'field'         => 'name',
+            'name'          => __('Name'),
+            'datatype'      => 'itemlink',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '2',
+            'table'         => self::getTable(),
+            'field'         => 'is_active',
+            'name'          => __('Active', 'checklist'),
+            'datatype'      => 'bool',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '3',
+            'table'         => self::getTable(),
+            'field'         => 'is_blocking',
+            'name'          => __('Blocking', 'checklist'),
+            'datatype'      => 'bool',
+            'massiveaction' => false,
+        ];
+
+        // La colonne s'appelle `notification_delay_hours` pour raisons
+        // historiques, mais son unité vit dans `notification_delay_unit` : le
+        // libellé reste donc « Notification delay », sans unité codée en dur.
+        $tab[] = [
+            'id'            => '4',
+            'table'         => self::getTable(),
+            'field'         => 'notification_delay_hours',
+            'name'          => __('Notification delay', 'checklist'),
+            'datatype'      => 'number',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '19',
+            'table'         => self::getTable(),
+            'field'         => 'date_creation',
+            'name'          => __('Creation date', 'checklist'),
+            'datatype'      => 'datetime',
+            'massiveaction' => false,
+        ];
+
+        // Voir le commentaire de l'option 80 côté checklist : `dropdown` joint la
+        // table étrangère, donc `field` nomme une colonne de la table des
+        // entités. On passe par `Entity::getTable()` plutôt que par le littéral :
+        // c'est l'accesseur natif, et le nom de table en dur reste ainsi réservé
+        // aux requêtes maison — que ce fichier n'a plus le droit d'écrire depuis
+        // le correctif N+1 (voir smoke_checklist_entity).
+        $tab[] = [
+            'id'            => '80',
+            'table'         => Entity::getTable(),
+            'field'         => 'completename',
+            'name'          => Entity::getTypeName(1),
+            'datatype'      => 'dropdown',
+            'massiveaction' => false,
+        ];
+
+        return $tab;
+    }
+
     public static function getMenuName(): string
     {
         return __('Checklist templates', 'checklist');
@@ -31,12 +116,22 @@ class PluginChecklistTemplate extends CommonDBTM
 
     public static function canView(): bool
     {
-        return (bool) Session::haveRight('config', READ);
+        return (bool) Session::haveRight(self::$rightname, READ);
     }
 
     public static function canCreate(): bool
     {
-        return (bool) Session::haveRight('config', UPDATE);
+        return (bool) Session::haveRight(self::$rightname, CREATE);
+    }
+
+    public static function canUpdate(): bool
+    {
+        return (bool) Session::haveRight(self::$rightname, UPDATE);
+    }
+
+    public static function canPurge(): bool
+    {
+        return (bool) Session::haveRight(self::$rightname, PURGE);
     }
 
     public static function getMenuContent(): array|false
@@ -45,7 +140,7 @@ class PluginChecklistTemplate extends CommonDBTM
             return false;
         }
 
-        $web_dir = Plugin::getWebDir('checklist');
+        $web_dir = plugin_checklist_web_dir();
         $menu = [
             'title' => static::getMenuName(),
             'page'  => $web_dir . '/front/template.php',
@@ -64,19 +159,33 @@ class PluginChecklistTemplate extends CommonDBTM
 
     // ─── Récupération ─────────────────────────────────────────────────────────
 
+    /**
+     * Templates visible from an entity, in one query.
+     *
+     * The entity restriction is GLPI's own: getEntitiesRestrictCriteria() builds
+     * "entities_id = <entity> OR (is_recursive = 1 AND entities_id IN <ancestors>)"
+     * as criteria the query builder folds into this SELECT. Ancestors come from
+     * glpi_entities.ancestors_cache (cached), so the whole visibility question
+     * costs one query for the whole list instead of one tree walk per template.
+     */
     public static function getAll(bool $active_only = true, ?int $entity_id = null): array
     {
         global $DB;
 
         $entity_id ??= (int) Session::getActiveEntity();
-        $where    = $active_only ? ["is_active" => 1] : [];
+
+        // Keys are disjoint: the helper's alias wraps its criteria under a crc32
+        // key precisely so it can be merged without clobbering anything.
+        $where = getEntitiesRestrictCriteria(static::getTable(), 'entities_id', $entity_id, true);
+        if ($active_only) {
+            $where['is_active'] = 1;
+        }
+
         $items    = [];
         $iterator = $DB->request(["FROM" => static::getTable(), "WHERE" => $where, "ORDER" => ["name ASC"]]);
 
         foreach ($iterator as $row) {
-            if (self::isVisibleInEntity($row, $entity_id)) {
-                $items[] = $row;
-            }
+            $items[] = $row;
         }
 
         return $items;
@@ -107,54 +216,17 @@ class PluginChecklistTemplate extends CommonDBTM
         return self::isVisibleInEntity($row, $entity_id);
     }
 
+    /**
+     * Same restriction as getAll(), narrowed to a single row: the template is
+     * visible iff it still matches once the entity criteria are applied.
+     */
     private static function isVisibleInEntity(array $template, int $entity_id): bool
     {
-        $template_entity = (int) ($template["entities_id"] ?? 0);
-        if ($template_entity === $entity_id) {
-            return true;
-        }
-
-        if (!(int) ($template["is_recursive"] ?? 0)) {
-            return false;
-        }
-
-        if ($template_entity === 0) {
-            return true;
-        }
-
-        return self::isEntityAncestorOf($template_entity, $entity_id);
-    }
-
-    private static function isEntityAncestorOf(int $ancestor_id, int $entity_id): bool
-    {
-        global $DB;
-
-        $current = $entity_id;
-        $guard   = 0;
-
-        while ($current > 0 && $guard++ < 100) {
-            $row = $DB->request([
-                "SELECT" => ["entities_id"],
-                "FROM"   => "glpi_entities",
-                "WHERE"  => ["id" => $current],
-            ])->current();
-
-            if (!$row) {
-                return false;
-            }
-
-            $parent = (int) ($row["entities_id"] ?? 0);
-            if ($parent === $ancestor_id) {
-                return true;
-            }
-            if ($parent === $current) {
-                return false;
-            }
-
-            $current = $parent;
-        }
-
-        return false;
+        return countElementsInTable(
+            static::getTable(),
+            ['id' => (int) ($template['id'] ?? 0)]
+            + getEntitiesRestrictCriteria(static::getTable(), 'entities_id', $entity_id, true)
+        ) > 0;
     }
 
     // ─── Affichage liste ──────────────────────────────────────────────────────
@@ -162,12 +234,12 @@ class PluginChecklistTemplate extends CommonDBTM
     public static function showList(): void
     {
         $templates = self::getAll(false);
-        $web_dir   = Plugin::getWebDir('checklist');
+        $web_dir   = plugin_checklist_web_dir();
 
         echo '<div class="container-fluid">';
         echo '<div class="d-flex justify-content-between align-items-center mb-3">';
         echo '<h2>' . __('Checklist templates', 'checklist') . '</h2>';
-        echo '<a class="btn btn-primary" href="' . $web_dir . '/front/template.form.php">';
+        echo '<a class="btn btn-primary" href="' . htmlspecialchars($web_dir) . '/front/template.form.php">';
         echo '<i class="fas fa-plus me-1"></i>' . __('Add a template', 'checklist') . '</a>';
         echo '</div>';
 
@@ -213,10 +285,10 @@ class PluginChecklistTemplate extends CommonDBTM
     public function showForm($ID, array $options = []): bool
     {
         $this->initForm($ID, $options);
-        $web_dir = Plugin::getWebDir('checklist');
+        $web_dir = plugin_checklist_web_dir();
         $is_new  = $ID <= 0;
 
-        echo '<form method="POST" action="' . $web_dir . '/front/template.form.php">';
+        echo '<form method="POST" action="' . htmlspecialchars($web_dir) . '/front/template.form.php">';
         echo Html::hidden('id', ['value' => $ID]);
         echo Html::hidden('_glpi_csrf_token', ['value' => Session::getNewCSRFToken()]);
 
@@ -254,25 +326,117 @@ class PluginChecklistTemplate extends CommonDBTM
         echo '</div>';
 
         // ── Entité + récursivité ───────────────────────────────────────────────
-        echo '<div class="col-md-6">';
-        echo '<label class="form-label">' . Entity::getTypeName(1) . '</label>';
-        Entity::dropdown([
-            'name'   => 'entities_id',
-            'value'  => $this->fields['entities_id'] ?? Session::getActiveEntity(),
-            'entity' => $_SESSION['glpiactiveentities'] ?? [],
-        ]);
-        echo '</div>';
+        // Éditables UNIQUEMENT à la création : c'est là que
+        // `check(-1, CREATE, $_POST)` (front/template.form.php) valide l'entité
+        // choisie. Sur le formulaire d'édition, ces deux champs sont retirés du
+        // POST avant update() — l'entité d'un template n'est pas déplaçable par
+        // ce formulaire (voir le unset() dans template.form.php) : les rendre
+        // éditables en édition serait un contrôle mensonger (l'utilisateur les
+        // change et rien ne bouge). On ne les affiche donc que si $is_new.
+        if ($is_new) {
+            echo '<div class="col-md-6">';
+            echo '<label class="form-label">' . Entity::getTypeName(1) . '</label>';
+            Entity::dropdown([
+                'name'   => 'entities_id',
+                'value'  => $this->fields['entities_id'] ?? Session::getActiveEntity(),
+                'entity' => $_SESSION['glpiactiveentities'] ?? [],
+            ]);
+            echo '</div>';
 
-        echo '<div class="col-md-6 d-flex align-items-center">';
-        echo '<div class="form-check mt-4">';
-        echo '<input class="form-check-input" type="checkbox" name="is_recursive" value="1" id="tpl_recursive"' . (($this->fields['is_recursive'] ?? 0) ? ' checked' : '') . '>';
-        echo '<label class="form-check-label" for="tpl_recursive">' . __('Child entities') . '</label>';
-        echo '</div>';
+            echo '<div class="col-md-6 d-flex align-items-center">';
+            echo '<div class="form-check mt-4">';
+            echo '<input class="form-check-input" type="checkbox" name="is_recursive" value="1" id="tpl_recursive"' . (($this->fields['is_recursive'] ?? 0) ? ' checked' : '') . '>';
+            echo '<label class="form-check-label" for="tpl_recursive">' . __('Child entities') . '</label>';
+            echo '</div>';
+            echo '</div>';
+        }
+
+        // ── Blocage de la résolution / clôture ─────────────────────────────────
+        // Recopié sur chaque checklist créée depuis ce template : les hooks de
+        // veto interrogent alors la checklist, jamais le template.
+        echo '<div class="col-md-6">';
+        echo '<label class="form-label">' . __('Block solving/closing while tasks remain', 'checklist') . '</label>';
+        Dropdown::showYesNo('is_blocking', $this->fields['is_blocking'] ?? 0);
+        echo '<small class="text-muted d-block">' . __('Applies to checklists created from this template. Ad-hoc checklists never block.', 'checklist') . '</small>';
         echo '</div>';
 
         echo '<div class="col-12">';
         echo '<label class="form-label">' . __('Comment') . '</label>';
         echo '<textarea class="form-control" name="comment" rows="2">' . htmlspecialchars($this->fields['comment'] ?? '') . '</textarea>';
+        echo '</div>';
+
+        echo '</div></div>'; // card-body / card
+
+        // ── Surcharges de notification propres au template ─────────────────────
+        // Chaque liste propose la sentinelle « inherit » (valeur par défaut en
+        // base) : tant qu'elle est sélectionnée, PluginChecklistConfig::resolve()
+        // retombe sur le réglage global.
+        $inherit = PluginChecklistConfig::INHERIT;
+
+        $yesno_choices = [
+            $inherit => __('Inherit global setting', 'checklist'),
+            '1'      => __('Yes'),
+            '0'      => __('No'),
+        ];
+        $privacy_choices = [
+            $inherit  => __('Inherit global setting', 'checklist'),
+            'glpi'    => __('As in GLPI', 'checklist'),
+            'public'  => __('Public', 'checklist'),
+            'private' => __('Private', 'checklist'),
+        ];
+
+        $lbl_followup = __('Add a followup to the ticket', 'checklist');
+        $lbl_privacy  = __('Followup visibility', 'checklist');
+        $lbl_notify   = __('Send a notification', 'checklist');
+
+        echo '<div class="card mb-3">';
+        echo '<div class="card-header"><strong>' . __('Notifications', 'checklist') . '</strong></div>';
+        echo '<div class="card-body row g-3">';
+
+        echo '<div class="col-12"><h4 class="mb-0">' . __('When a checklist item is completed', 'checklist') . '</h4></div>';
+
+        echo '<div class="col-md-4">';
+        echo '<label class="form-label">' . $lbl_followup . '</label>';
+        Dropdown::showFromArray('followup_on_item_done', $yesno_choices, [
+            'value' => $this->fields['followup_on_item_done'] ?? $inherit,
+        ]);
+        echo '</div>';
+
+        echo '<div class="col-md-4">';
+        echo '<label class="form-label">' . $lbl_privacy . '</label>';
+        Dropdown::showFromArray('followup_privacy', $privacy_choices, [
+            'value' => $this->fields['followup_privacy'] ?? $inherit,
+        ]);
+        echo '</div>';
+
+        echo '<div class="col-md-4">';
+        echo '<label class="form-label">' . $lbl_notify . '</label>';
+        Dropdown::showFromArray('notify_on_item_done', $yesno_choices, [
+            'value' => $this->fields['notify_on_item_done'] ?? $inherit,
+        ]);
+        echo '</div>';
+
+        echo '<div class="col-12"><h4 class="mb-0">' . __('When a checklist task is overdue', 'checklist') . '</h4></div>';
+
+        echo '<div class="col-md-4">';
+        echo '<label class="form-label">' . $lbl_followup . '</label>';
+        Dropdown::showFromArray('followup_on_overdue', $yesno_choices, [
+            'value' => $this->fields['followup_on_overdue'] ?? $inherit,
+        ]);
+        echo '</div>';
+
+        echo '<div class="col-md-4">';
+        echo '<label class="form-label">' . $lbl_privacy . '</label>';
+        Dropdown::showFromArray('overdue_privacy', $privacy_choices, [
+            'value' => $this->fields['overdue_privacy'] ?? $inherit,
+        ]);
+        echo '</div>';
+
+        echo '<div class="col-md-4">';
+        echo '<label class="form-label">' . $lbl_notify . '</label>';
+        Dropdown::showFromArray('notify_on_overdue', $yesno_choices, [
+            'value' => $this->fields['notify_on_overdue'] ?? $inherit,
+        ]);
         echo '</div>';
 
         echo '</div></div>'; // card-body / card
@@ -283,7 +447,12 @@ class PluginChecklistTemplate extends CommonDBTM
             echo '<button type="submit" name="add" class="btn btn-primary"><i class="fas fa-save me-1"></i>' . __('Add') . '</button>';
         } else {
             echo '<button type="submit" name="update" class="btn btn-primary"><i class="fas fa-save me-1"></i>' . __('Save') . '</button>';
-            echo '<button type="submit" name="purge" class="btn btn-danger ms-auto" onclick="return confirm(\'' . __('Delete this template?') . '\')">';
+            // The confirmation text goes in an attribute, HTML-escaped, and is
+            // read by the delegated [data-cl-confirm] handler in checklist.js.
+            // Inline confirm('…') broke outright under any locale whose
+            // translation contains an apostrophe (fr_FR: "l'élément").
+            echo '<button type="submit" name="purge" class="btn btn-danger ms-auto"';
+            echo ' data-cl-confirm="' . htmlspecialchars(__('Delete this template?', 'checklist')) . '">';
             echo '<i class="fas fa-trash me-1"></i>' . __('Delete') . '</button>';
         }
         echo '</div>';
@@ -315,12 +484,13 @@ class PluginChecklistTemplate extends CommonDBTM
                     echo '<td>' . htmlspecialchars($it['description'] ?? '') . '</td>';
                     echo '<td>' . ($it['is_exceptional'] ? '<span class="badge bg-warning text-dark">⚠ EXC</span>' : '') . '</td>';
                     echo '<td>';
-                    echo '<form method="POST" action="' . $web_dir . '/front/template.form.php" class="d-inline">';
+                    echo '<form method="POST" action="' . htmlspecialchars($web_dir) . '/front/template.form.php" class="d-inline">';
                     echo Html::hidden('id', ['value' => $it['id']]);
                     echo Html::hidden('template_id', ['value' => $ID]);
                     echo Html::hidden('_glpi_csrf_token', ['value' => Session::getNewCSRFToken()]);
                     echo '<button type="submit" name="delete_item" class="btn btn-sm btn-outline-danger"';
-                    echo ' onclick="return confirm(\'' . __('Delete?') . '\')"><i class="fas fa-times"></i></button>';
+                    echo ' data-cl-confirm="' . htmlspecialchars(__('Delete?', 'checklist')) . '">';
+                    echo '<i class="fas fa-times"></i></button>';
                     echo '</form>';
                     echo '</td>';
                     echo '</tr>';
@@ -338,7 +508,7 @@ class PluginChecklistTemplate extends CommonDBTM
 
             // Formulaire ajout de tâche
             echo '<div class="card-footer">';
-            echo '<form method="POST" action="' . $web_dir . '/front/template.form.php" class="row g-2 align-items-end">';
+            echo '<form method="POST" action="' . htmlspecialchars($web_dir) . '/front/template.form.php" class="row g-2 align-items-end">';
             echo Html::hidden('template_id', ['value' => $ID]);
             echo Html::hidden('_glpi_csrf_token', ['value' => Session::getNewCSRFToken()]);
 
@@ -348,7 +518,7 @@ class PluginChecklistTemplate extends CommonDBTM
             echo '<div class="col-md-4"><label class="form-label">' . __('Description') . '</label>';
             echo '<input type="text" class="form-control form-control-sm" name="description"></div>';
 
-            echo '<div class="col-md-2"><label class="form-label">' . __('Rank') . '</label>';
+            echo '<div class="col-md-2"><label class="form-label">' . __('Rank', 'checklist') . '</label>';
             echo '<input type="number" class="form-control form-control-sm" name="rank" value="' . (count($items) + 1) . '" min="0"></div>';
 
             echo '<div class="col-md-1"><div class="form-check mt-4"><input class="form-check-input" type="checkbox" name="is_exceptional" value="1" id="is_exc">';
@@ -369,8 +539,10 @@ class PluginChecklistTemplate extends CommonDBTM
      */
     private static function renderReorderScript(): void
     {
-        $csrf = Session::getNewCSRFToken(true);
-        $sortable_url = Plugin::getWebDir('checklist') . '/js/Sortable.min.js';
+        // Page token (header-validated with preserve_token) — not standalone,
+        // to avoid churning GLPI's CSRF token pool.
+        $csrf = Session::getNewCSRFToken();
+        $sortable_url = plugin_checklist_web_dir() . '/js/Sortable.min.js';
 
         echo '<script>
         (function(){

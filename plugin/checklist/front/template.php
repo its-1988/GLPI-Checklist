@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 // GLPI 11 : inclus par LegacyFileLoadController (Symfony). Ne pas re-inclure.
 
-Session::checkRight('config', READ);
+Session::checkRight('plugin_checklist_template', READ);
 
 Html::header(
     __('Checklist templates', 'checklist'),

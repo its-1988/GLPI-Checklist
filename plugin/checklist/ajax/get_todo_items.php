@@ -9,6 +9,13 @@ header('Content-Type: application/json');
 
 Session::checkLoginUser();
 
+// Droit de profil : lecture des checklists (défense en profondeur)
+if (!Session::haveRight('plugin_checklist_checklist', READ)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Access denied']);
+    exit;
+}
+
 $itemtype = $_POST['itemtype'] ?? '';
 $items_id = (int) ($_POST['items_id'] ?? 0);
 
@@ -17,48 +24,53 @@ if (empty($itemtype) || $items_id <= 0) {
     exit;
 }
 
-// Contrôle d'accès : l'utilisateur doit pouvoir consulter l'élément parent
-if (!PluginChecklistChecklist::canAccessParent($itemtype, $items_id, READ)) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'Access denied']);
-    exit;
-}
-
 global $DB;
 
 $cl_table = PluginChecklistChecklist::getTable();
-$it_table = PluginChecklistItem::getTable();
 
-$iterator = $DB->request([
-    'SELECT'    => [
-        "$it_table.id",
-        "$it_table.name",
-        "$cl_table.name AS cl_name",
-    ],
-    'FROM'       => $it_table,
-    'INNER JOIN' => [
-        $cl_table => [
-            'ON' => [
-                $it_table => 'plugin_checklist_checklists_id',
-                $cl_table => 'id',
-            ],
-        ],
-    ],
-    'WHERE'     => [
-        "$cl_table.itemtype" => $itemtype,
-        "$cl_table.items_id" => $items_id,
-        "$it_table.status"   => 'todo',
-    ],
-    'ORDER'     => ["$cl_table.name ASC", "$it_table.rank_todo ASC"],
-]);
+// Contrôle d'accès natif : CommonDBChild::can() valide, pour chaque checklist
+// portée par cet élément, l'accès en lecture à l'élément GLPI parent et à son
+// entité. Une seule inaccessible ⇒ refus, pas de réponse partielle.
+$checklist = new PluginChecklistChecklist();
+foreach ($DB->request([
+    'SELECT' => ['id'],
+    'FROM'   => $cl_table,
+    'WHERE'  => ['itemtype' => $itemtype, 'items_id' => $items_id],
+]) as $cl) {
+    if (!$checklist->can((int) $cl['id'], READ)) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Access denied']);
+        exit;
+    }
+}
 
+// La jointure checklist⇄tâche vit dans le modèle (openItemsQuery), plus ici :
+// le veto de résolution/clôture en a besoin lui aussi et deux copies auraient
+// dérivé. La modale valide N'IMPORTE quelle tâche, bloquante ou non — d'où
+// getOpenItemsFor() et non getBlockingOpenItems().
 $items = [];
-foreach ($iterator as $row) {
+foreach (PluginChecklistChecklist::getOpenItemsFor($itemtype, $items_id) as $row) {
     $items[] = [
-        'id'      => (int) $row['id'],
-        'name'    => $row['name'],
-        'cl_name' => $row['cl_name'],
+        'id'      => $row['item_id'],
+        'name'    => $row['item_name'],
+        'cl_name' => $row['checklist_name'],
     ];
 }
 
-echo json_encode(['success' => true, 'items' => $items]);
+/*
+ * ADDED key (v2.1.0 Task 5): the modal body, rendered by the server.
+ *
+ * The client used to loop over `items` and build the list-group itself, with a
+ * clvEsc() that did not escape apostrophes. `items` is kept exactly as it was —
+ * it is the machine-readable half of this response and nothing about it moved.
+ *
+ * The EMPTY case is rendered here too, deliberately: "no open tasks" is not an
+ * error and not an absence, it is a state with a message ("All tasks are
+ * already done!"), and having the server answer it means the client needs no
+ * branch of its own — it inserts whatever came back, whichever state it is.
+ */
+echo json_encode([
+    'success' => true,
+    'items'   => $items,
+    'html'    => PluginChecklistChecklist::getValidateListHtml($items),
+]);

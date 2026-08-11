@@ -5,9 +5,20 @@
 
 declare(strict_types=1);
 
-class PluginChecklistChecklist extends CommonDBTM
+class PluginChecklistChecklist extends CommonDBChild
 {
-    public static $rightname = 'config';
+    // Parent polymorphe (Ticket, Computer…) : CommonDBChild lit le nom de la
+    // classe dans la colonne `itemtype` et l'id dans `items_id`. C'est ce qui
+    // donne nativement le contrôle de droits/entité sur l'élément porteur —
+    // aucun garde-fou maison n'est nécessaire.
+    public static $itemtype = 'itemtype';
+    public static $items_id = 'items_id';
+
+    // Les créations/suppressions de checklists atterrissent dans l'onglet
+    // « Historique » de l'élément parent.
+    public $dohistory = true;
+
+    public static $rightname = 'plugin_checklist_checklist';
 
     public static function getIcon(): string
     {
@@ -25,6 +36,117 @@ class PluginChecklistChecklist extends CommonDBTM
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    //  OPTIONS DE RECHERCHE NATIVES
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Rend les checklists cherchables, triables, exportables et accessibles via
+     * l'API REST.
+     *
+     * `searchOptions()` est `final` dans CommonDBTM (11.0.8, src/CommonDBTM.php
+     * :3816) : seule `rawSearchOptions()` se surcharge. Le retour est une LISTE
+     * PLATE — l'`id` est un membre de chaque entrée, pas la clé du tableau —, et
+     * `id` comme `name` sont obligatoires : leur absence lève une exception qui
+     * emporte toute la page de recherche de l'itemtype (:3831).
+     *
+     * L'objet est instancié VIDE pour cet appel (:3825) : ne jamais lire
+     * `$this->fields` ici.
+     */
+    public function rawSearchOptions()
+    {
+        // La base ajoute déjà l'en-tête `common` puis, dès que la table porte une
+        // colonne `name`, une entrée `id => 1` (:3892). Redéclarer cet id sans
+        // retirer l'entrée par défaut produirait un DOUBLON, signalé par un
+        // E_USER_WARNING dans searchOptions() (:3853) — pas une surcharge. On
+        // filtre donc l'id 1 pour le redéfinir explicitement, ce qui rend le jeu
+        // d'options déterministe au lieu de dépendre de la sonde `isField()`.
+        $tab = array_values(array_filter(
+            parent::rawSearchOptions(),
+            static fn(array $opt): bool => (string) ($opt['id'] ?? '') !== '1'
+        ));
+
+        $tab[] = [
+            'id'            => '1',
+            'table'         => self::getTable(),
+            'field'         => 'name',
+            'name'          => __('Name'),
+            'datatype'      => 'itemlink',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '2',
+            'table'         => self::getTable(),
+            'field'         => 'percent_done',
+            'name'          => __('Percent done', 'checklist'),
+            'datatype'      => 'number',
+            'unit'          => '%',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '3',
+            'table'         => self::getTable(),
+            'field'         => 'status',
+            'name'          => __('Status', 'checklist'),
+            'datatype'      => 'string',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '4',
+            'table'         => self::getTable(),
+            'field'         => 'is_blocking',
+            'name'          => __('Blocking', 'checklist'),
+            'datatype'      => 'bool',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '5',
+            'table'         => self::getTable(),
+            'field'         => 'items_total',
+            'name'          => __('Total tasks', 'checklist'),
+            'datatype'      => 'number',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '6',
+            'table'         => self::getTable(),
+            'field'         => 'items_done',
+            'name'          => __('Completed tasks', 'checklist'),
+            'datatype'      => 'number',
+            'massiveaction' => false,
+        ];
+
+        $tab[] = [
+            'id'            => '19',
+            'table'         => self::getTable(),
+            'field'         => 'date_creation',
+            'name'          => __('Creation date', 'checklist'),
+            'datatype'      => 'datetime',
+            'massiveaction' => false,
+        ];
+
+        // `datatype => dropdown` fait JOINDRE la table étrangère par le moteur de
+        // recherche : le `field` doit nommer une colonne de la table des entités,
+        // pas la clé étrangère locale `entities_id` (qui n'afficherait que des
+        // ids bruts et casserait le tri). C'est l'idiome du cœur
+        // (src/Computer.php:650), servi ici par l'accesseur natif.
+        $tab[] = [
+            'id'            => '80',
+            'table'         => Entity::getTable(),
+            'field'         => 'completename',
+            'name'          => Entity::getTypeName(1),
+            'datatype'      => 'dropdown',
+            'massiveaction' => false,
+        ];
+
+        return $tab;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     //  INTÉGRATION ONGLET GLPI
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -33,6 +155,15 @@ class PluginChecklistChecklist extends CommonDBTM
      */
     public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
     {
+        // Without the checklist READ right the very existence and COUNT of
+        // checklists must not leak as a tab badge. An empty return makes GLPI
+        // omit the tab entirely. Mirrors the READ gate on
+        // plugin_checklist_timeline_items(). Out of the box the right is 0 for
+        // every non-config profile, so this hides the count from most users.
+        if (!Session::haveRight('plugin_checklist_checklist', READ)) {
+            return '';
+        }
+
         $count = countElementsInTable(static::getTable(), [
             'itemtype' => $item->getType(),
             'items_id' => $item->getID(),
@@ -50,10 +181,15 @@ class PluginChecklistChecklist extends CommonDBTM
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    //  ASSETS INLINE — GLPI 11 ne sert pas les CSS/JS plugins via le routeur
+    //  BOOTSTRAP CLIENT — valeurs serveur passées en JSON à public/js/checklist.js
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private static function injectAssets(): void
+    /**
+     * Emits the small JSON object the client script reads (CSRF token + local
+     * SortableJS url). The behaviour itself lives in public/js/checklist.js,
+     * registered through the ADD_JAVASCRIPT hook.
+     */
+    private static function emitClientBootstrap(): void
     {
         static $done = false;
         if ($done) {
@@ -61,424 +197,18 @@ class PluginChecklistChecklist extends CommonDBTM
         }
         $done = true;
 
-        // ── CSS ───────────────────────────────────────────────────────────────
-        echo '<style id="cl-plugin-styles">
-        .cl-wrap{padding:.5rem 0}
-        .cl-topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;padding-bottom:.75rem;border-bottom:2px solid #e2e8f0}
-        .cl-topbar-left{display:flex;align-items:center;gap:.75rem}
-        .cl-topbar-title{font-size:1rem;font-weight:700;color:#1e293b}
-        .cl-topbar-sub{font-size:.78rem;color:#94a3b8}
-        .cl-empty{text-align:center;padding:3rem 1rem;color:#94a3b8;border:2px dashed #e2e8f0;border-radius:12px;margin-top:.5rem}
-        .cl-empty i{font-size:2rem;display:block;margin-bottom:.5rem}
-        /* Cards */
-        .cl-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:.75rem;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:box-shadow .2s}
-        .cl-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.09)}
-        .cl-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:.7rem 1rem;background:#f8fafc;cursor:pointer;user-select:none;border-bottom:1px solid transparent}
-        .cl-card-hdr:hover{background:#f1f5f9}
-        .cl-card-open>.cl-card-hdr{border-bottom-color:#e2e8f0}
-        .cl-card-hdr-left{display:flex;align-items:center;gap:.65rem;overflow:hidden;min-width:0}
-        .cl-card-icon{color:#6366f1;flex-shrink:0}
-        .cl-card-title{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .cl-card-count{font-size:.75rem;color:#94a3b8;flex-shrink:0}
-        .cl-card-hdr-right{display:flex;align-items:center;gap:.65rem;flex-shrink:0}
-        .cl-chevron{transition:transform .25s;color:#cbd5e1;font-size:.8rem}
-        .cl-chevron.open{transform:rotate(180deg)}
-        /* Kanban */
-        .cl-kanban-wrap{padding:1rem;background:#fafafa}
-        .cl-board{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:.75rem}
-        .cl-col{border-radius:10px;padding:.75rem}
-        .cl-col-todo{background:#eff6ff;border:1px solid #dbeafe}
-        .cl-col-done{background:#f0fdf4;border:1px solid #dcfce7}
-        .cl-col-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:.65rem;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em}
-        .cl-col-todo .cl-col-hdr{color:#1d4ed8}
-        .cl-col-done .cl-col-hdr{color:#15803d}
-        /* Items */
-        .cl-sort{list-style:none;padding:0;margin:0;min-height:60px}
-        .cl-item{background:#fff;border:1px solid #e2e8f0;border-radius:7px;padding:.45rem .7rem;margin-bottom:.35rem;cursor:pointer;transition:all .15s;font-size:.85rem}
-        .cl-item:hover{border-color:#6366f1;box-shadow:0 2px 8px rgba(99,102,241,.15);transform:translateY(-1px)}
-        .cl-item-row{display:flex;align-items:center;gap:.5rem}
-        .cl-item-name{flex:1}
-        .cl-item-desc{display:block;color:#94a3b8;font-size:.72rem;margin-top:2px;padding-left:1.1rem}
-        .cl-col-done .cl-item{border-color:#dcfce7;background:#fafffe}
-        .cl-col-done .cl-item .cl-item-name{color:#94a3b8;text-decoration:line-through}
-        .cl-item.cl-exc{border-left:3px solid #f59e0b!important}
-        .cl-badge-exc{font-size:.6rem;font-weight:700;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;border:1px solid #f59e0b;white-space:nowrap;flex-shrink:0}
-        .cl-drag-hdl{color:#cbd5e1;font-size:.65rem;cursor:grab;flex-shrink:0}
-        .cl-drag-hdl:active{cursor:grabbing}
-        .cl-item.sortable-ghost{opacity:.3;background:#e0e7ff!important}
-        .cl-item.sortable-chosen{box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:99}
-        /* Toolbar */
-        .cl-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;padding-top:.65rem;border-top:1px solid #e2e8f0;margin-top:.25rem}
-        /* History */
-        .cl-hist-wrap{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:.65rem .75rem;margin-top:.65rem;max-height:200px;overflow-y:auto}
-        .cl-hist-table{width:100%;border-collapse:collapse;font-size:.77rem}
-        .cl-hist-table td{padding:.2rem .4rem;border-bottom:1px solid #f1f5f9;vertical-align:top}
-        .cl-hist-table tr:last-child td{border:none}
-        .cl-hist-date{white-space:nowrap;color:#94a3b8}
-        .cl-hist-user{color:#475569;font-weight:500}
-        /* Footer link */
-        .cl-footer-link{display:block;text-align:right;margin-top:.75rem;font-size:.75rem;color:#94a3b8;text-decoration:none}
-        .cl-footer-link:hover{color:#6366f1;text-decoration:underline}
-        /* Searchable template picker */
-        .cl-tpl-picker{position:relative}
-        .cl-tpl-toggle{cursor:pointer;position:relative}
-        .cl-tpl-toggle.cl-open{border-color:#6366f1;box-shadow:0 0 0 .15rem rgba(99,102,241,.18)}
-        .cl-tpl-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:1080;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);overflow:hidden}
-        .cl-tpl-menu.cl-open{display:block;animation:clSlideIn .15s ease-out}
-        .cl-tpl-search-wrap{position:relative;padding:.5rem;border-bottom:1px solid #f1f5f9}
-        .cl-tpl-search-ico{position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:#cbd5e1;font-size:.8rem;pointer-events:none}
-        .cl-tpl-filter{padding-left:1.9rem!important}
-        .cl-tpl-list{list-style:none;margin:0;padding:.25rem;max-height:220px;overflow-y:auto}
-        .cl-tpl-opt{padding:.45rem .6rem;border-radius:6px;cursor:pointer;font-size:.87rem;display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .cl-tpl-opt:hover,.cl-tpl-opt.cl-hl{background:#eef2ff}
-        .cl-tpl-opt.cl-tpl-active{background:#e0e7ff;font-weight:600}
-        .cl-tpl-noresult{padding:.75rem;text-align:center;color:#94a3b8;font-size:.82rem}
-        /* Animations */
-        .cl-card-new{animation:clSlideIn .35s ease-out}
-        .cl-item-new{animation:clSlideIn .25s ease-out}
-        @keyframes clSlideIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
-        @media(max-width:640px){.cl-board{grid-template-columns:1fr}}
-        </style>';
-
-        // ── JS (SortableJS local + logique plugin) ────────────────────────────
-        $csrf_token  = Session::getNewCSRFToken(true); // standalone = true : token persistant
-        $sortable_url = Plugin::getWebDir('checklist') . '/js/Sortable.min.js';
-        echo '<script id="cl-plugin-scripts">
-        // GLPI 11 : CSRF for fetch goes via X-Glpi-Csrf-Token header
-        var clSortableUrl=' . json_encode($sortable_url) . ';
-        var clCsrfToken=' . json_encode($csrf_token) . ';
-        function clFetch(url, fd) {
-            return fetch(url, {
-                method: "POST",
-                body: fd,
-                headers: {
-                    "X-Glpi-Csrf-Token": clCsrfToken,
-                    "X-Requested-With": "XMLHttpRequest"
-                }
-            });
-        }
-        (function(){
-            if(typeof Sortable!=="undefined") return;
-            var s=document.createElement("script");
-            s.src=clSortableUrl;
-            document.head.appendChild(s);
-        })();
-
-        function clToggleKanban(id){
-            var k=document.getElementById("cl-kanban-"+id);
-            var c=document.getElementById("cl-chev-"+id);
-            var card=document.getElementById("cl-card-"+id);
-            if(!k) return;
-            var open=k.style.display!=="none";
-            k.style.display=open?"none":"block";
-            if(c) c.classList.toggle("open",!open);
-            if(card) card.classList.toggle("cl-card-open",!open);
-            if(!open) setTimeout(function(){clInitSort(id);},80);
-        }
-
-        function clInitSort(id){
-            if(typeof Sortable==="undefined") return;
-            var kanban=document.querySelector(".cl-kanban-wrap[data-cl-id=\""+id+"\"]");
-            var base=kanban?kanban.dataset.ajaxUrl:"";
-            ["todo","done"].forEach(function(col){
-                var el=document.getElementById("cl-"+col+"-"+id);
-                if(!el||el._si) return; el._si=true;
-                Sortable.create(el,{
-                    group:"cl-"+id, handle:".cl-drag-hdl",
-                    animation:150, ghostClass:"sortable-ghost", chosenClass:"sortable-chosen",
-                    onEnd:function(e){
-                        var from=e.from, to=e.to, itemId=parseInt(e.item.dataset.id);
-                        if(from!==to) clToggleItem(itemId,base+"/move_item.php",false);
-                        var ids=[].slice.call(to.querySelectorAll(".cl-item")).map(function(x){return x.dataset.id;});
-                        clSaveOrder(to.dataset.clId,to.dataset.status,ids,base+"/reorder_items.php");
-                        if(from!==to){
-                            var fids=[].slice.call(from.querySelectorAll(".cl-item")).map(function(x){return x.dataset.id;});
-                            clSaveOrder(from.dataset.clId,from.dataset.status,fids,base+"/reorder_items.php");
-                        }
-                        clUpdatePct(id);
-                    }
-                });
-            });
-        }
-
-        function clToggleItem(itemId,url,move){
-            var li=document.getElementById("cl-item-"+itemId);
-            if(!li||li.dataset.lk) return;
-            li.dataset.lk="1"; li.style.opacity=".4";
-            var fd=new FormData(); fd.append("item_id",itemId);
-            clFetch(url,fd)
-            .then(function(r){return r.json();})
-            .then(function(d){
-                if(d.success){
-                    var p=li.parentElement, cid=p.dataset.clId;
-                    var t=document.getElementById("cl-"+d.new_status+"-"+cid);
-                    if(t) t.appendChild(li);
-                    clUpdatePct(cid);
-                }
-                delete li.dataset.lk; li.style.opacity="1";
-            }).catch(function(){delete li.dataset.lk;li.style.opacity="1";});
-        }
-
-        function clSaveOrder(clId,col,ids,url){
-            var fd=new FormData();
-            fd.append("cl_id",clId); fd.append("column",col);
-            ids.forEach(function(id){fd.append("ids[]",id);});
-            clFetch(url,fd).catch(function(){});
-        }
-
-        function clUpdatePct(clId){
-            var doneList=document.getElementById("cl-done-"+clId);
-            var todoList=document.getElementById("cl-todo-"+clId);
-            var done=doneList?doneList.querySelectorAll(".cl-item").length:0;
-            var todo=todoList?todoList.querySelectorAll(".cl-item").length:0;
-            var total=done+todo, pct=total>0?Math.round(done/total*100):0;
-            var card=document.getElementById("cl-card-"+clId);
-            if(!card) return;
-            var ct=card.querySelector(".cl-card-count"),
-                bar=card.querySelector(".progress-bar"),
-                bdg=card.querySelector(".cl-card-hdr-right .badge");
-            if(ct) ct.textContent=done+"/"+total;
-            if(bar){bar.style.width=pct+"%";bar.className="progress-bar "+(pct===100?"bg-success":"bg-primary");}
-            if(bdg){bdg.textContent=pct+"%";bdg.className="badge "+(pct===100?"bg-success":"bg-primary");}
-            // Mise à jour des badges numériques dans les en-têtes de colonnes
-            if(todoList){
-                var todoBadge=todoList.closest(".cl-col");
-                todoBadge=todoBadge?todoBadge.querySelector(".cl-col-hdr .badge"):null;
-                if(todoBadge) todoBadge.textContent=todo;
-            }
-            if(doneList){
-                var doneBadge=doneList.closest(".cl-col");
-                doneBadge=doneBadge?doneBadge.querySelector(".cl-col-hdr .badge"):null;
-                if(doneBadge) doneBadge.textContent=done;
-            }
-        }
-
-        function clDeleteChecklist(id,url){
-            if(!confirm("Supprimer cette checklist et toutes ses taches ?")) return;
-            var fd=new FormData(); fd.append("action","delete"); fd.append("cl_id",id);
-            clFetch(url,fd).then(function(r){return r.json();}).then(function(d){
-                if(d.success){
-                    var c=document.getElementById("cl-card-"+id);
-                    if(c) c.remove();
-                    clUpdateGlobalCount();
-                } else alert("Erreur lors de la suppression.");
-            });
-        }
-
-        // Échappement HTML complet (&, <, >, ") pour les valeurs insérées via JS
-        function clEsc(s){
-            return String(s==null?"":s)
-                .replace(/&/g,"&amp;").replace(/</g,"&lt;")
-                .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-        }
-
-        function clBuildItemHtml(id, name, desc, exc, moveUrl){
-            var cls="cl-item cl-item-new"+(exc?" cl-exc":"");
-            var oc="clToggleItem("+id+",\""+moveUrl+"\")";
-            var h="<li class=\""+cls+"\" id=\"cl-item-"+id+"\" data-id=\""+id+"\" onclick=\""+oc+"\">";
-            h+="<div class=\"cl-item-row\">";
-            h+="<span class=\"cl-drag-hdl\"><i class=\"fas fa-grip-vertical\"></i></span>";
-            if(exc) h+="<span class=\"cl-badge-exc\">⚠ EXC</span>";
-            h+="<span class=\"cl-item-name\">"+clEsc(name)+"</span>";
-            h+="</div>";
-            if(desc) h+="<span class=\"cl-item-desc\">"+clEsc(desc)+"</span>";
-            h+="</li>";
-            return h;
-        }
-
-        function clShowAddExc(id,url,moveUrl){
-            var name=prompt("Nom de la tache exceptionnelle :","");
-            if(!name||!name.trim()) return;
-            var desc=prompt("Description (facultatif) :","") || "";
-            var fd=new FormData();
-            fd.append("cl_id",id); fd.append("name",name.trim()); fd.append("description",desc);
-            clFetch(url,fd).then(function(r){return r.json();}).then(function(d){
-                if(d.success){
-                    var todoList=document.getElementById("cl-todo-"+id);
-                    if(todoList){
-                        todoList.insertAdjacentHTML("beforeend", clBuildItemHtml(d.id, d.name, d.description, true, moveUrl));
-                    }
-                    clUpdatePct(id);
-                } else alert("Erreur : "+(d.error||"Inconnue"));
-            });
-        }
-
-        function clUpdateGlobalCount(){
-            var sub=document.querySelector(".cl-topbar-sub");
-            if(!sub) return;
-            var n=document.querySelectorAll("#cl-list .cl-card").length;
-            sub.textContent=n+" checklist(s)";
-            var emp=document.querySelector(".cl-empty");
-            var list=document.getElementById("cl-list");
-            if(n===0){
-                if(list) list.remove();
-                if(!emp){
-                    var wrap=document.getElementById("cl-container");
-                    if(wrap){
-                        var d=document.createElement("div");
-                        d.className="cl-empty";
-                        d.innerHTML="<i class=\"fas fa-clipboard\"></i>No checklist yet. Click the button above to start.";
-                        var footer=wrap.querySelector(".cl-footer-link");
-                        wrap.insertBefore(d, footer);
-                    }
-                }
-            } else {
-                if(emp) emp.remove();
-            }
-        }
-
-        function clBuildCardHtml(id, name, total, ajaxUrl){
-            var e=clEsc(name);
-            var h="<div class=\"cl-card cl-card-new\" id=\"cl-card-"+id+"\">";
-            h+="<div class=\"cl-card-hdr\" onclick=\"clToggleKanban("+id+")\" role=\"button\">";
-            h+="<div class=\"cl-card-hdr-left\">";
-            h+="<i class=\"fas fa-clipboard-list cl-card-icon\"></i>";
-            h+="<span class=\"cl-card-title\">"+e+"</span>";
-            h+="<span class=\"cl-card-count\">0/"+total+"</span>";
-            h+="</div>";
-            h+="<div class=\"cl-card-hdr-right\">";
-            h+="<div class=\"progress\" style=\"width:120px;height:7px\"><div class=\"progress-bar bg-primary\" style=\"width:0%\"></div></div>";
-            h+="<span class=\"badge bg-primary\">0%</span>";
-            h+="<button type=\"button\" style=\"background:transparent;border:none;color:#dc3545;padding:0 3px;cursor:pointer;font-size:.85rem;line-height:1;opacity:.7\" title=\"Delete\" ";
-            h+="onmouseenter=\"this.style.opacity=1\" onmouseleave=\"this.style.opacity=.7\" ";
-            h+="onclick=\"event.stopPropagation();clDeleteChecklist("+id+",&quot;"+ajaxUrl+"/checklist.php&quot;)\">";
-            h+="<i class=\"fas fa-trash-alt\"></i></button>";
-            h+="<i class=\"fas fa-chevron-down cl-chevron\" id=\"cl-chev-"+id+"\"></i>";
-            h+="</div></div>";
-            h+="<div class=\"cl-kanban-wrap\" id=\"cl-kanban-"+id+"\" style=\"display:none\" data-cl-id=\""+id+"\" data-ajax-url=\""+ajaxUrl+"\">";
-            h+="<div class=\"cl-board\">";
-            h+="<div class=\"cl-col cl-col-todo\"><div class=\"cl-col-hdr\"><span><i class=\"far fa-circle me-1\"></i>To do</span>";
-            h+="<span class=\"badge bg-primary rounded-pill\">"+total+"</span></div>";
-            h+="<ul class=\"cl-sort\" id=\"cl-todo-"+id+"\" data-status=\"todo\" data-cl-id=\""+id+"\"></ul></div>";
-            h+="<div class=\"cl-col cl-col-done\"><div class=\"cl-col-hdr\"><span><i class=\"fas fa-check-circle me-1\"></i>Done</span>";
-            h+="<span class=\"badge bg-success rounded-pill\">0</span></div>";
-            h+="<ul class=\"cl-sort\" id=\"cl-done-"+id+"\" data-status=\"done\" data-cl-id=\""+id+"\"></ul></div>";
-            h+="</div>";
-            h+="<div class=\"cl-toolbar\">";
-            h+="<button class=\"btn btn-sm btn-outline-warning\" onclick=\"clShowAddExc("+id+",&quot;"+ajaxUrl+"/add_item.php&quot;,&quot;"+ajaxUrl+"/move_item.php&quot;)\">";
-            h+="<i class=\"fas fa-exclamation-triangle me-1\"></i>Add exceptional task</button>";
-            h+="</div></div>";
-            h+="</div>";
-            return h;
-        }
-
-        // ── Sélecteur de modèle searchable ────────────────────────────────────
-        function clCloseTplMenu(){
-            var m=document.getElementById("cl-tpl-menu"), t=document.getElementById("cl-tpl-toggle");
-            if(m) m.classList.remove("cl-open");
-            if(t) t.classList.remove("cl-open");
-        }
-        function clFilterTpl(q){
-            q=(q||"").toLowerCase(); var any=false;
-            document.querySelectorAll("#cl-tpl-list .cl-tpl-opt").forEach(function(o){
-                var match=(o.dataset.name||"").toLowerCase().indexOf(q)>=0;
-                o.style.display=match?"":"none";
-                if(match) any=true;
-            });
-            var nr=document.getElementById("cl-tpl-noresult");
-            if(nr) nr.style.display=any?"none":"block";
-        }
-        function clResetTplPicker(){
-            var hid=document.querySelector("#cl-tpl-picker [name=templates_id]");
-            var tog=document.getElementById("cl-tpl-toggle");
-            var def=document.querySelector("#cl-tpl-list .cl-tpl-opt[data-id=\"0\"]");
-            if(hid) hid.value="0";
-            if(tog && def) tog.textContent=def.dataset.name;
-            document.querySelectorAll("#cl-tpl-list .cl-tpl-opt").forEach(function(o){
-                o.classList.toggle("cl-tpl-active",o.dataset.id==="0");
-            });
-        }
-        document.addEventListener("click",function(e){
-            var tog=e.target.closest("#cl-tpl-toggle");
-            if(tog){
-                var m=document.getElementById("cl-tpl-menu");
-                if(m.classList.contains("cl-open")){ clCloseTplMenu(); }
-                else {
-                    m.classList.add("cl-open"); tog.classList.add("cl-open");
-                    var f=document.getElementById("cl-tpl-filter");
-                    if(f){ f.value=""; clFilterTpl(""); setTimeout(function(){f.focus();},30); }
-                }
-                return;
-            }
-            var opt=e.target.closest(".cl-tpl-opt");
-            if(opt){
-                var hid=document.querySelector("#cl-tpl-picker [name=templates_id]");
-                var t=document.getElementById("cl-tpl-toggle");
-                if(hid) hid.value=opt.dataset.id;
-                if(t) t.textContent=opt.dataset.name;
-                document.querySelectorAll("#cl-tpl-list .cl-tpl-opt").forEach(function(o){o.classList.remove("cl-tpl-active");});
-                opt.classList.add("cl-tpl-active");
-                clCloseTplMenu();
-                return;
-            }
-            if(!e.target.closest("#cl-tpl-picker")) clCloseTplMenu();
-        });
-        document.addEventListener("input",function(e){
-            if(e.target.id==="cl-tpl-filter") clFilterTpl(e.target.value);
-        });
-        document.addEventListener("keydown",function(e){
-            if(e.target.id!=="cl-tpl-filter") return;
-            if(e.key==="Enter"){
-                e.preventDefault();
-                var vis=[].slice.call(document.querySelectorAll("#cl-tpl-list .cl-tpl-opt")).filter(function(o){return o.style.display!=="none";});
-                if(vis[0]) vis[0].click();
-            } else if(e.key==="Escape"){ clCloseTplMenu(); }
-        });
-
-        // Event delegation on document -- works even if DOM is injected
-        // after DOMContentLoaded (GLPI tabs loaded dynamically)
-        document.addEventListener("click",function(e){
-            var btn=e.target.closest("#cl-create-submit");
-            if(!btn) return;
-            var form=document.getElementById("cl-create-form");
-            if(!form) return;
-            var url=btn.dataset.ajaxUrl;
-            var ajaxBase=url.replace(/\/checklist\.php$/,"");
-            var name=form.querySelector("[name=name]").value.trim();
-            var itemtype=form.querySelector("[name=itemtype]").value;
-            var items_id=form.querySelector("[name=items_id]").value;
-            var tpl=form.querySelector("[name=templates_id]").value;
-            if(!name){form.querySelector("[name=name]").classList.add("is-invalid");return;}
-            btn.disabled=true;
-            var fd=new FormData();
-            fd.append("action","create"); fd.append("name",name);
-            fd.append("itemtype",itemtype); fd.append("items_id",items_id);
-            fd.append("templates_id",tpl);
-            clFetch(url,fd).then(function(r){return r.json();}).then(function(d){
-                if(d.success){
-                    // Close modal
-                    var modal=document.getElementById("clCreateModal");
-                    if(modal && typeof bootstrap!=="undefined"){
-                        var bsModal=bootstrap.Modal.getInstance(modal);
-                        if(bsModal) bsModal.hide();
-                    }
-                    // Reset form
-                    form.reset();
-                    clResetTplPicker();
-                    // Remove empty placeholder
-                    var emp=document.querySelector(".cl-empty");
-                    if(emp) emp.remove();
-                    // Ensure list container exists
-                    var list=document.getElementById("cl-list");
-                    if(!list){
-                        var wrap=document.getElementById("cl-container");
-                        var footer=wrap.querySelector(".cl-footer-link");
-                        list=document.createElement("div");
-                        list.id="cl-list";
-                        wrap.insertBefore(list, footer);
-                    }
-                    // Build and insert card
-                    list.insertAdjacentHTML("beforeend", clBuildCardHtml(d.id, d.name, d.total, ajaxBase));
-                    clUpdateGlobalCount();
-                    // Auto-open the new card kanban
-                    setTimeout(function(){ clToggleKanban(d.id); }, 100);
-                } else {
-                    alert("Erreur: "+(d.error||"Inconnue"));
-                }
-                btn.disabled=false;
-            }).catch(function(){btn.disabled=false;});
-        });
-        </script>';
+        // Page token (sent via X-Glpi-Csrf-Token header, kernel preserves it):
+        // NOT standalone — standalone mints a fresh token per ticket render and
+        // churns GLPI's CSRF pool (evicts other tokens → CSRF errors elsewhere).
+        echo '<script>window.PLUGIN_CHECKLIST = '
+            . json_encode(
+                [
+                    'csrf_token'   => Session::getNewCSRFToken(),
+                    'sortable_url' => plugin_checklist_web_dir() . '/js/Sortable.min.js',
+                ],
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
+            )
+            . ';</script>';
     }
 
 
@@ -490,11 +220,19 @@ class PluginChecklistChecklist extends CommonDBTM
     {
         global $DB;
 
-        self::injectAssets(); // CSS + JS inline (GLPI 11 ne sert pas les assets statiques plugins)
+        // Defence in depth: the tab content renderer refuses to emit anything —
+        // not even the client bootstrap or the empty container — without the
+        // checklist READ right. getTabNameForItem() already hides the tab, but a
+        // direct tab-content request must be gated here too.
+        if (!Session::haveRight('plugin_checklist_checklist', READ)) {
+            return;
+        }
+
+        self::emitClientBootstrap(); // CSRF token + SortableJS url for public/js/checklist.js
 
         $itemtype   = $item->getType();
         $items_id   = $item->getID();
-        $plugin_url = Plugin::getWebDir('checklist');
+        $plugin_url = plugin_checklist_web_dir();
         $ajax_url   = $plugin_url . '/ajax';
         $parent_entity = self::getParentEntity($itemtype, $items_id);
 
@@ -515,26 +253,35 @@ class PluginChecklistChecklist extends CommonDBTM
         echo '<div class="cl-topbar">';
         echo '<div class="cl-topbar-left">';
         echo '<span class="cl-topbar-title"><i class="fas fa-tasks"></i> ' . __('Checklists', 'checklist') . '</span>';
-        echo '<span class="cl-topbar-sub">' . count($checklists) . ' checklist(s)</span>';
+        // Same string the client rebuilds after a create/delete (see checklist.js)
+        echo '<span class="cl-topbar-sub">'
+            . sprintf(_n('%d checklist', '%d checklists', count($checklists), 'checklist'), count($checklists))
+            . '</span>';
         echo '</div>';
         self::renderCreateModal($itemtype, $items_id, $templates, $ajax_url);
         echo '</div>'; // cl-topbar
 
         if (empty($checklists)) {
-            echo '<div class="cl-empty">';
-            echo '<i class="fas fa-clipboard"></i>';
-            echo __('No checklist yet. Click «+ New checklist» to start.', 'checklist');
-            echo '</div>';
-        } else {
-            echo '<div id="cl-list">';
-            foreach ($checklists as $cl) {
-                self::renderCard($cl, $ajax_url);
-            }
-            echo '</div>';
+            self::renderEmptyState();
         }
 
+        // #cl-list is emitted UNCONDITIONALLY, even with nothing in it.
+        //
+        // It used to appear only in the non-empty branch, which forced the
+        // client to CREATE it when the first checklist arrived and REMOVE it
+        // when the last one left — a container whose existence was a second
+        // piece of state the browser had to keep in step with the server. Now
+        // it is simply always there and the client only ever inserts into it.
+        // (With checklists present the emitted bytes are unchanged; the only
+        // difference is an empty <div id="cl-list"></div> on an empty tab.)
+        echo '<div id="cl-list">';
+        foreach ($checklists as $cl) {
+            self::renderCard($cl, $ajax_url);
+        }
+        echo '</div>';
+
         // Lien gestion des templates
-        $tpl_url = Plugin::getWebDir('checklist') . '/front/template.php';
+        $tpl_url = plugin_checklist_web_dir() . '/front/template.php';
         echo '<a class="cl-footer-link" href="' . htmlspecialchars($tpl_url) . '" target="_blank">';
         echo '<i class="fas fa-cog me-1"></i>' . __('Manage checklist templates', 'checklist') . '</a>';
 
@@ -566,7 +313,7 @@ class PluginChecklistChecklist extends CommonDBTM
                            placeholder="' . htmlspecialchars(__('e.g. Onboarding SIRH', 'checklist')) . '">
                   </div>
                   <div class="mb-2">
-                    <label class="form-label fw-semibold">' . __('From template', 'checklist') . ' <span class="text-muted fw-normal">(' . __('optional') . ')</span></label>
+                    <label class="form-label fw-semibold">' . __('From template', 'checklist') . ' <span class="text-muted fw-normal">(' . __('optional', 'checklist') . ')</span></label>
                     <div class="cl-tpl-picker" id="cl-tpl-picker">
                       <input type="hidden" name="templates_id" value="0">
                       <button type="button" class="form-select text-start cl-tpl-toggle" id="cl-tpl-toggle">— ' . __('Empty checklist', 'checklist') . ' —</button>
@@ -602,31 +349,190 @@ class PluginChecklistChecklist extends CommonDBTM
         </div>';
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  RENDER FACADES — the ONLY place card/item markup exists
+    // ═══════════════════════════════════════════════════════════════════════════
+    //
+    // Until v2.1.0 this markup lived in THREE hand-maintained copies: the echo
+    // bodies below, clBuildCardHtml()/clBuildItemHtml() in public/js/checklist.js
+    // (used after an ajax create/add) and a fourth-wall repetition inside
+    // hook.php's timeline entry. They drifted three times before anyone noticed:
+    //
+    //   1. floor() here vs Math.round() there — 999/1000 read 100 % on the card
+    //      and 99 % in the database, the search column and the timeline;
+    //   2. the JS card stamped the template's task count into the column badge
+    //      but emitted an EMPTY <ul>, so a 5-task template drew a badge of 5
+    //      over an empty column until the user reloaded;
+    //   3. the progress bar was 100px here, 120px in the JS and 110px in the
+    //      timeline.
+    //
+    // Every one of those is the same bug: two pieces of code claiming to draw
+    // the same thing. So the server draws it, once, and the ajax endpoints hand
+    // the result to the client, which does nothing but insert it.
+    //
+    // WHY ob_start() RATHER THAN A REWRITE. The bodies below echo, and they are
+    // the bytes that shipped. Rewriting them into string concatenation to make
+    // them return would have changed thousands of characters of markup by hand
+    // in the same commit that claims to change none of it — and the golden
+    // harness would have had no way to tell an intended change from a typo.
+    // A returning facade over an UNCHANGED body keeps the golden diff empty and
+    // makes that emptiness meaningful.
+
+    /** The card as a string, for ajax/checklist.php?create. */
+    public static function getCardHtml(array $cl, string $ajax_url): string
+    {
+        ob_start();
+        self::renderCard($cl, $ajax_url);
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * The card for a checklist id, read back from the database.
+     *
+     * The endpoint could assemble a row from the values it just posted, but
+     * reading it back is the point: what the client inserts is then literally
+     * what a page reload would draw, denormalised counters and all.
+     */
+    public static function getCardHtmlById(int $cl_id, string $ajax_url): string
+    {
+        $cl = new self();
+        if (!$cl->getFromDB($cl_id)) {
+            return '';
+        }
+        return self::getCardHtml($cl->fields, $ajax_url);
+    }
+
+    /** One task <li> as a string, for ajax/add_item.php. */
+    public static function getItemHtml(array $item, string $ajax_url): string
+    {
+        ob_start();
+        self::renderItem($item, $ajax_url);
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * The "no checklist yet" placeholder, for ajax/checklist.php?delete.
+     *
+     * The client used to rebuild this block with innerHTML when the last
+     * checklist went away — a fifth copy of markup, for four lines of it.
+     */
+    public static function getEmptyStateHtml(): string
+    {
+        ob_start();
+        self::renderEmptyState();
+        return (string) ob_get_clean();
+    }
+
+    /** Shared with hook.php's timeline entry. */
+    public static function getIdentityHtml(string $name, int $done, int $total, ?string $label = null): string
+    {
+        ob_start();
+        self::renderIdentity($name, $done, $total, $label);
+        return (string) ob_get_clean();
+    }
+
+    /** Shared with hook.php's timeline entry. */
+    public static function getProgressHtml(int $pct, bool $full): string
+    {
+        ob_start();
+        self::renderProgress($pct, $full);
+        return (string) ob_get_clean();
+    }
+
+    private static function renderEmptyState(): void
+    {
+        echo '<div class="cl-empty">';
+        echo '<i class="fas fa-clipboard"></i>';
+        echo __('No checklist yet. Click «+ New checklist» to start.', 'checklist');
+        echo '</div>';
+    }
+
+    /**
+     * Icon + name + counter — the identity of a checklist, wherever it is shown.
+     *
+     * $label is the only thing the two call sites disagree about: the timeline
+     * spells the type out ("Checklist") because a timeline mixes followups,
+     * tasks, solutions and validations and an unlabelled row is guesswork, while
+     * the tab is already inside a panel titled "Checklists". Passing null emits
+     * exactly the bytes renderCard emitted before this was extracted.
+     */
+    private static function renderIdentity(string $name, int $done, int $total, ?string $label = null): void
+    {
+        echo '<i class="fas fa-clipboard-list cl-card-icon"></i>';
+        if ($label !== null) {
+            echo '<span class="cl-card-count">' . htmlspecialchars($label) . '</span>';
+        }
+        echo '<span class="cl-card-title">' . htmlspecialchars($name) . '</span>';
+        echo '<span class="cl-card-count">' . $done . '/' . $total . '</span>';
+    }
+
+    /**
+     * The progress bar and its badge.
+     *
+     * $full rather than `$pct === 100`: an empty checklist is 0 % and is NOT
+     * complete, and a checklist at 999/1000 floors to 99 % precisely so it
+     * cannot claim to be finished. Both call sites derive $full the same way
+     * ($total > 0 && $done >= $total) from the denormalised columns.
+     *
+     * The width is the ONLY inline style left in here, and it is a value, not a
+     * style decision: the bar's size lives in .cl-progress (public/css).
+     */
+    private static function renderProgress(int $pct, bool $full): void
+    {
+        $tone = $full ? 'bg-success' : 'bg-primary';
+        echo '<div class="progress cl-progress"><div class="progress-bar ' . $tone . '" style="width:' . $pct . '%"></div></div>';
+        echo '<span class="badge ' . $tone . '">' . $pct . '%</span>';
+    }
+
     // ─── Carte checklist (résumé + kanban dépliable) ───────────────────────────
 
     private static function renderCard(array $cl, string $ajax_url): void
     {
         $cl_id = (int) $cl['id'];
-        $done  = (int) countElementsInTable(PluginChecklistItem::getTable(), ['plugin_checklist_checklists_id' => $cl_id, 'status' => 'done']);
-        $total = (int) countElementsInTable(PluginChecklistItem::getTable(), ['plugin_checklist_checklists_id' => $cl_id]);
-        $pct   = $total > 0 ? (int) round($done / $total * 100) : 0;
-        $full  = $total > 0 && $done === $total;
+
+        // Read the DENORMALISED counters (added in CL2-T2, kept current by the
+        // single recompute point from CL2-T3) instead of recounting here.
+        //
+        // This used to fire two COUNT queries per card and derive the figure
+        // with round(). Both were wrong, in different ways:
+        //
+        //   - cost: 2 queries × N checklists on every tab render, for numbers
+        //     the row already carries (showForItem SELECTs the full row);
+        //   - correctness: the stored `percent_done` is computed with FLOOR
+        //     (hook.php, plugin_checklist_backfill_progress + the recompute),
+        //     so round() here made the card disagree with the value shown in
+        //     the search column, the notification and the timeline entry —
+        //     999/1000 read 100% on the card and 99% everywhere else.
+        //
+        // The card, the ITIL search column and the timeline entry now all quote
+        // the same stored number.
+        $done  = (int) ($cl['items_done'] ?? 0);
+        $total = (int) ($cl['items_total'] ?? 0);
+        $pct   = (int) ($cl['percent_done'] ?? 0);
+        $full  = $total > 0 && $done >= $total;
 
         echo '<div class="cl-card" id="cl-card-' . $cl_id . '">';
 
         // En-tête carte
-        echo '<div class="cl-card-hdr" onclick="clToggleKanban(' . $cl_id . ')" role="button">';
+        // Behaviour travels in data-* and is picked up by the delegated
+        // dispatcher in checklist.js (see the block comment on renderItem).
+        echo '<div class="cl-card-hdr" data-cl-toggle-kanban="' . $cl_id . '" role="button">';
         echo '<div class="cl-card-hdr-left">';
-        echo '<i class="fas fa-clipboard-list cl-card-icon"></i>';
-        echo '<span class="cl-card-title">' . htmlspecialchars($cl['name']) . '</span>';
-        echo '<span class="cl-card-count">' . $done . '/' . $total . '</span>';
+        self::renderIdentity((string) $cl['name'], $done, $total);
         echo '</div>';
         echo '<div class="cl-card-hdr-right">';
-        echo '<div class="progress" style="width:100px;height:7px;"><div class="progress-bar ' . ($full ? 'bg-success' : 'bg-primary') . '" style="width:' . $pct . '%"></div></div>';
-        echo '<span class="badge ' . ($full ? 'bg-success' : 'bg-primary') . '">' . $pct . '%</span>';
-        echo '<button type="button" style="background:transparent;border:none;color:#dc3545;padding:0 3px;cursor:pointer;font-size:.85rem;line-height:1;opacity:.7" title="' . __('Delete') . '"';
-        echo ' onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=.7"';
-        echo ' onclick="event.stopPropagation();clDeleteChecklist(' . $cl_id . ',\'' . htmlspecialchars($ajax_url . '/checklist.php') . '\')">';
+        self::renderProgress($pct, $full);
+        // .cl-card-del, not an inline style. The inline one was the last thing
+        // in the plugin forcing an !important: it outranked every selector, so
+        // the :hover fade in checklist.css could only beat it with the flag.
+        // Two ordinary class rules now, and no flag.
+        echo '<button type="button" class="cl-card-del" title="' . htmlspecialchars(__('Delete')) . '"';
+        // The former `event.stopPropagation()` — which stopped a delete click
+        // from also toggling the kanban it sits inside — is now implicit: the
+        // dispatcher resolves the INNERMOST action element, so this button
+        // wins over the .cl-card-hdr wrapping it and the header never sees it.
+        echo ' data-cl-delete-checklist="' . $cl_id . '"';
+        echo ' data-cl-url="' . htmlspecialchars($ajax_url . '/checklist.php') . '">';
         echo '<i class="fas fa-trash-alt"></i></button>';
         echo '<i class="fas fa-chevron-down cl-chevron" id="cl-chev-' . $cl_id . '"></i>';
         echo '</div>';
@@ -666,40 +572,45 @@ class PluginChecklistChecklist extends CommonDBTM
 
         echo '</div>'; // cl-board
 
-        // Toolbar
+        // Toolbar — plus de panneau d'historique maison : les checklists sont
+        // des CommonDBChild, GLPI journalise tout dans l'onglet « Historique »
+        // de l'élément parent.
         echo '<div class="cl-toolbar">';
         echo '<button class="btn btn-sm btn-outline-warning"';
-        echo ' onclick="clShowAddExc(' . $cl_id . ',\'' . htmlspecialchars($ajax_url . '/add_item.php') . '\',\'' . htmlspecialchars($ajax_url . '/move_item.php') . '\')">';
+        echo ' data-cl-add-exc="' . $cl_id . '"';
+        echo ' data-cl-add-url="' . htmlspecialchars($ajax_url . '/add_item.php') . '"';
+        echo ' data-cl-move-url="' . htmlspecialchars($ajax_url . '/move_item.php') . '">';
         echo '<i class="fas fa-exclamation-triangle me-1"></i>' . __('Add exceptional task', 'checklist') . '</button>';
-        echo '<button class="btn btn-sm btn-outline-secondary"';
-        echo ' data-bs-toggle="collapse" data-bs-target="#cl-hist-' . $cl_id . '">';
-        echo '<i class="fas fa-history me-1"></i>' . __('History', 'checklist') . '</button>';
         echo '</div>';
-
-        // Historique
-        echo '<div class="collapse" id="cl-hist-' . $cl_id . '">';
-        echo '<div class="cl-hist-wrap">';
-        $entries = PluginChecklistLog::getForChecklist($cl_id);
-        if (empty($entries)) {
-            echo '<p class="text-muted small mb-0">' . __('No history yet.', 'checklist') . '</p>';
-        } else {
-            echo '<table class="cl-hist-table"><tbody>';
-            foreach ($entries as $e) {
-                echo '<tr><td class="cl-hist-date">' . htmlspecialchars($e['date']) . '</td>';
-                echo '<td class="cl-hist-user">' . htmlspecialchars($e['user']) . '</td>';
-                echo '<td>' . htmlspecialchars($e['action']);
-                if (isset($e['new_value']['name'])) {
-                    echo ' : <em>' . htmlspecialchars($e['new_value']['name']) . '</em>';
-                }
-                echo '</td></tr>';
-            }
-            echo '</tbody></table>';
-        }
-        echo '</div></div>';
     }
 
     // ─── Rendu d'un item (li) ─────────────────────────────────────────────────
 
+    /*
+     * NO INLINE HANDLERS ANYWHERE IN THIS FILE — deliberate, and the reason is
+     * not tidiness.
+     *
+     * An onclick value is JavaScript source living inside an HTML attribute, so
+     * every interpolated value has to be HTML-safe AND JS-safe simultaneously.
+     * When that fails the browser does not install a broken handler, it
+     * installs NOTHING: template.class.php shipped a delete button whose
+     * confirm() text was a translation, and under a locale whose translation
+     * contains an apostrophe the dialog never appeared and the form submitted
+     * unasked. These four sites interpolate an id and an ajax URL — safe today
+     * only because those happen to contain no quote — so they were the same
+     * bug waiting for a different input.
+     *
+     * Behaviour is therefore expressed as data-cl-* attributes and dispatched
+     * by ONE delegated listener bound on `document` in checklist.js. `document`
+     * is not a default, it is the requirement: SortableJS re-parents these <li>
+     * nodes between the two <ul> columns, clToggleKanban() hides and shows the
+     * wrapper, and a newly created card is injected as a whole subtree — a
+     * listener bound to any of those containers would stop firing the moment
+     * the node moved out of it, silently. `document` is the one ancestor none
+     * of that can detach a node from. It is also what the two existing
+     * precedents use ([data-clv-id] in checklist-validate.js, [data-cl-confirm]
+     * in checklist.js).
+     */
     private static function renderItem(array $item, string $ajax_url): void
     {
         $id  = (int) $item['id'];
@@ -707,13 +618,14 @@ class PluginChecklistChecklist extends CommonDBTM
 
         echo '<li class="cl-item' . ($exc ? ' cl-exc' : '') . '"';
         echo ' id="cl-item-' . $id . '" data-id="' . $id . '"';
-        echo ' onclick="clToggleItem(' . $id . ',\'' . htmlspecialchars($ajax_url . '/move_item.php') . '\')">';
+        echo ' data-cl-toggle-item="' . $id . '"';
+        echo ' data-cl-move-url="' . htmlspecialchars($ajax_url . '/move_item.php') . '">';
 
         echo '<div class="cl-item-row">';
         echo '<span class="cl-drag-hdl"><i class="fas fa-grip-vertical"></i></span>';
 
         if ($exc) {
-            echo '<span class="cl-badge-exc">⚠ EXC</span>';
+            echo '<span class="cl-badge-exc">' . htmlspecialchars(__('⚠ EXC', 'checklist')) . '</span>';
         }
 
         echo '<span class="cl-item-name">' . htmlspecialchars($item['name']) . '</span>';
@@ -724,6 +636,73 @@ class PluginChecklistChecklist extends CommonDBTM
         }
 
         echo '</li>';
+    }
+
+    // ─── Fragments de la modale « valider une tâche » ──────────────────────────
+    //
+    // These four used to be string literals in public/js/checklist-validate.js,
+    // assembled with a clvEsc() that — like checklist.js's clEsc() — did not
+    // escape apostrophes. They are markup, so they belong where the rest of the
+    // markup is. The shell and the two placeholders travel on the JSON bootstrap
+    // (hook.php), the list on the ajax/get_todo_items.php response.
+
+    public static function getValidateModalHtml(): string
+    {
+        return '<div class="modal fade" id="clvModal" tabindex="-1" aria-hidden="true">'
+            . '<div class="modal-dialog modal-dialog-centered">'
+            . '<div class="modal-content">'
+            . '<div class="modal-header">'
+            . '<h5 class="modal-title"><i class="ti ti-checks me-2"></i>'
+            . htmlspecialchars(__('Validate checklist tasks', 'checklist')) . '</h5>'
+            . '<button type="button" class="btn-close" data-bs-dismiss="modal"></button>'
+            . '</div>'
+            . '<div class="modal-body" id="clvBody"></div>'
+            . '<div class="modal-footer">'
+            . '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">'
+            . htmlspecialchars(__('Cancel')) . '</button>'
+            . '<button type="button" class="btn btn-success" id="clvSubmit"><i class="ti ti-check me-1"></i>'
+            . htmlspecialchars(__('Validate selected', 'checklist')) . '</button>'
+            . '</div></div></div></div>';
+    }
+
+    /**
+     * The modal body: one checkbox per open task, or the "nothing to do" state.
+     *
+     * @param array<int, array{id: mixed, name: mixed, cl_name?: mixed}> $items
+     */
+    public static function getValidateListHtml(array $items): string
+    {
+        if ($items === []) {
+            return '<div class="text-center py-4 text-muted">'
+                . '<i class="ti ti-circle-check fs-1 text-success d-block mb-2"></i>'
+                . htmlspecialchars(__('All tasks are already done!', 'checklist'))
+                . '</div>';
+        }
+
+        $h = '<div class="list-group">';
+        foreach ($items as $it) {
+            $h .= '<label class="list-group-item list-group-item-action d-flex align-items-start gap-2 py-2" style="cursor:pointer">';
+            $h .= '<input type="checkbox" class="clvcb form-check-input mt-1" value="' . (int) $it['id'] . '">';
+            $h .= '<div><div class="fw-semibold">' . htmlspecialchars((string) $it['name']) . '</div>';
+            if (!empty($it['cl_name'])) {
+                $h .= '<small class="text-muted"><i class="ti ti-clipboard-list me-1"></i>'
+                    . htmlspecialchars((string) $it['cl_name']) . '</small>';
+            }
+            $h .= '</div></label>';
+        }
+        return $h . '</div>';
+    }
+
+    public static function getValidateLoadingHtml(): string
+    {
+        return '<div class="text-center py-3"><i class="fas fa-spinner fa-spin"></i> '
+            . htmlspecialchars(__('Loading...')) . '</div>';
+    }
+
+    public static function getValidateErrorHtml(): string
+    {
+        return '<div class="text-danger text-center py-3">'
+            . htmlspecialchars(__('Loading error.', 'checklist')) . '</div>';
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -757,101 +736,481 @@ class PluginChecklistChecklist extends CommonDBTM
             return false;
         }
 
-        $result = $DB->insert(static::getTable(), [
+        // `is_blocking` est recopié depuis le template au moment de la création :
+        // le veto de résolution/clôture n'a alors qu'une lecture indexée à faire
+        // sur la checklist, sans jointure vers le template. Une checklist
+        // ad-hoc (sans template) ne bloque JAMAIS — il n'existe aucun endroit où
+        // l'utilisateur pourrait exprimer ce choix, et bloquer par défaut
+        // transformerait une liste de pense-bêtes en obstacle à la clôture.
+        $is_blocking = 0;
+        if ($templates_id > 0) {
+            $tpl_row = $DB->request([
+                'FROM'  => PluginChecklistTemplate::getTable(),
+                'WHERE' => ['id' => $templates_id],
+            ])->current();
+            $is_blocking = (int) ($tpl_row['is_blocking'] ?? 0);
+        }
+
+        // add() : GLPI horodate (date_creation/date_mod) et journalise la
+        // création dans l'historique de l'élément parent.
+        $cl_id = (new self())->add([
             'name'                          => $name,
             'itemtype'                      => $itemtype,
             'items_id'                      => $items_id,
             'plugin_checklist_templates_id' => $templates_id,
             'status'                        => 'open',
-            'date_creation'                 => date('Y-m-d H:i:s'),
-            'date_mod'                      => date('Y-m-d H:i:s'),
+            'is_blocking'                   => $is_blocking,
             'users_id'                      => Session::getLoginUserID() ?: 0,
             'entities_id'                   => $entities_id,
         ]);
 
-        if (!$result) {
+        if ($cl_id === false) {
             return false;
         }
 
-        $cl_id = (int) $DB->insertId();
-
-        // Instanciation depuis le template
+        // Instanciation depuis le template — via le modèle, pas en SQL brut.
         if ($templates_id > 0) {
-            foreach (PluginChecklistTemplateItem::getForTemplate($templates_id) as $rank => $tpi) {
-                $DB->insert(PluginChecklistItem::getTable(), [
-                    'plugin_checklist_checklists_id' => $cl_id,
+            foreach (PluginChecklistTemplateItem::getForTemplate($templates_id) as $tpi) {
+                (new PluginChecklistItem())->add([
+                    'plugin_checklist_checklists_id' => (int) $cl_id,
                     'name'                           => $tpi['name'],
                     'description'                    => $tpi['description'] ?? '',
                     'status'                         => 'todo',
                     'rank_todo'                      => (int) $tpi['rank'],
                     'rank_done'                      => 0,
                     'is_exceptional'                 => 0,
-                    'date_creation'                  => date('Y-m-d H:i:s'),
-                    'date_mod'                       => date('Y-m-d H:i:s'),
+                    // Point de départ du délai de retard (lu par le CRON) :
+                    // ce n'est pas date_creation, GLPI ne le pose pas.
                     'date_todo'                      => date('Y-m-d H:i:s'),
                     'users_id_creator'               => Session::getLoginUserID() ?: 0,
                 ]);
             }
         }
 
-        return $cl_id;
+        return (int) $cl_id;
     }
 
-    public static function deleteChecklist(int $cl_id): bool
-    {
-        global $DB;
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  ACTION DE MASSE — appliquer un template à une sélection
+    // ═══════════════════════════════════════════════════════════════════════════
 
-        $DB->delete(PluginChecklistLog::getTable(),  ['plugin_checklist_checklists_id' => $cl_id]);
-        $DB->delete(PluginChecklistItem::getTable(), ['plugin_checklist_checklists_id' => $cl_id]);
-        $DB->delete(static::getTable(),              ['id' => $cl_id]);
+    /**
+     * The form shown between "choose the action" and "run it".
+     *
+     * Base declaration: src/CommonDBTM.php:4010. The reference implementation is
+     * src/Calendar.php:109-127 — render the inputs, echo the submit button named
+     * `massiveaction`, return true. Returning false (the base behaviour) tells
+     * core there is nothing to ask, and it would run the action straight away
+     * with no template at all.
+     *
+     * getAction() hands back the BARE action name: core stripped the
+     * `PluginChecklistChecklist:` prefix when it split the key
+     * (src/MassiveAction.php:312-315). Comparing against a prefixed name is dead
+     * code — core carries exactly that bug in src/Certificate.php:596.
+     */
+    public static function showMassiveActionsSubForm(MassiveAction $ma)
+    {
+        if ($ma->getAction() !== 'apply_template') {
+            return parent::showMassiveActionsSubForm($ma);
+        }
+
+        // Session entity, not the entity of each selected item: the selection can
+        // straddle entities, and this list is built once for the whole batch. A
+        // template that turns out to be invisible from a given item's entity is
+        // rejected per item later, by createForItem()'s canUseTemplateForEntity()
+        // gate — so the worst case is a KO on that item, never a leak.
+        $templates = [];
+        foreach (PluginChecklistTemplate::getVisibleForEntity((int) Session::getActiveEntity(), true) as $tpl) {
+            $templates[(int) $tpl['id']] = $tpl['name'];
+        }
+
+        Dropdown::showFromArray('plugin_checklist_templates_id', $templates, [
+            'display_emptychoice' => true,
+        ]);
+        echo '<br><br>';
+        echo Html::submit(_x('button', 'Post'), ['name' => 'massiveaction']);
 
         return true;
     }
 
+    /**
+     * Applies the chosen template to every selected item.
+     *
+     * Base declaration: src/CommonDBTM.php:4027. This is deliberately nothing
+     * but a loop around createForItem(), which already owns entity resolution,
+     * the canUseTemplateForEntity() gate, template instantiation and the
+     * is_blocking mirror.
+     *
+     * What createForItem() does NOT own is the caller's right on the TARGET
+     * item: it validates the template against the item's entity and nothing
+     * else. Without the can() gate below, a technician could staple a checklist
+     * onto tickets they are not allowed to touch — massive actions are reached
+     * from a search result, and a search result is not an authorisation. Hence
+     * ACTION_NORIGHT per item, exactly as Calendar.php:157-160 does.
+     */
+    public static function processMassiveActionsForOneItemtype(
+        MassiveAction $ma,
+        CommonDBTM $item,
+        array $ids
+    ) {
+        if ($ma->getAction() !== 'apply_template') {
+            parent::processMassiveActionsForOneItemtype($ma, $item, $ids);
+            return;
+        }
+
+        $input   = $ma->getInput();
+        $tpl_id  = (int) ($input['plugin_checklist_templates_id'] ?? 0);
+
+        // Nothing chosen: say so and mark NOTHING done. Reporting the items as
+        // processed would make the run look successful while creating nothing.
+        if ($tpl_id <= 0) {
+            $ma->addMessage(__('No template selected', 'checklist'));
+            return;
+        }
+
+        // Resolved ONCE, outside the loop: a lookup per id would turn a
+        // 40-ticket selection into 40 extra queries for a value that cannot
+        // change between iterations.
+        $template = new PluginChecklistTemplate();
+        if (!$template->getFromDB($tpl_id)) {
+            $ma->addMessage(__('No template selected', 'checklist'));
+            return;
+        }
+        $name = (string) $template->fields['name'];
+
+        $itemtype = $item->getType();
+
+        foreach ($ids as $id) {
+            $id = (int) $id;
+
+            if (!$item->can($id, UPDATE)) {
+                $ma->itemDone($itemtype, $id, MassiveAction::ACTION_NORIGHT);
+                $ma->addMessage($item->getErrorMessage(ERROR_RIGHT));
+                continue;
+            }
+
+            if (self::createForItem($itemtype, $id, $name, $tpl_id)) {
+                $ma->itemDone($itemtype, $id, MassiveAction::ACTION_OK);
+            } else {
+                $ma->itemDone($itemtype, $id, MassiveAction::ACTION_KO);
+                $ma->addMessage($item->getErrorMessage(ERROR_ON_ACTION));
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
-    //  CONTRÔLE D'ACCÈS — empêche l'IDOR sur les endpoints AJAX
+    //  PROGRESSION — point de recalcul UNIQUE
     // ═══════════════════════════════════════════════════════════════════════════
 
     /**
-     * Vérifie que l'utilisateur courant a le droit demandé (READ/UPDATE) sur
-     * l'élément GLPI parent (Ticket, Computer…) auquel se rattache une checklist.
-     * Le contrôle GLPI `can()` valide aussi l'entité et l'accès spécifique à l'item.
+     * True while cleanDBonPurge() is cascading the task deletions. GLPI runs
+     * that cascade BEFORE deleting the checklist row itself
+     * (CommonDBTM::deleteFromDB), so without this guard every purged task would
+     * recompute a row that is about to disappear — and the moment the last
+     * « todo » task is gone the counters read done === total, which would
+     * announce a completion for a checklist being deleted.
      */
-    public static function canAccessParent(string $itemtype, int $items_id, int $right = READ): bool
-    {
-        if ($items_id <= 0 || !class_exists($itemtype) || !is_subclass_of($itemtype, CommonDBTM::class)) {
-            return false;
-        }
+    private static bool $purging = false;
 
-        $item = new $itemtype();
-        return (bool) $item->can($items_id, $right);
+    /**
+     * Pure progress computation for one checklist.
+     *
+     * countElementsInTable() is the aggregate idiom this plugin already uses
+     * everywhere (renderCard, ajax/checklist.php, template.class.php…). Two
+     * indexed COUNTs on the `plugin_checklist_checklists_id` key are cheap, and
+     * it avoids \QueryExpression, deprecated since GLPI 11.0.0.
+     *
+     * @return array{done:int,total:int,percent:int,complete:bool}
+     */
+    public static function computeProgress(int $cl_id): array
+    {
+        $total = (int) countElementsInTable(
+            PluginChecklistItem::getTable(),
+            ['plugin_checklist_checklists_id' => $cl_id]
+        );
+        $done = (int) countElementsInTable(
+            PluginChecklistItem::getTable(),
+            ['plugin_checklist_checklists_id' => $cl_id, 'status' => 'done']
+        );
+
+        return [
+            'done'  => $done,
+            'total' => $total,
+            // floor(), comme le backfill SQL de la migration 2.0.0 : 999/1000
+            // doit afficher 99 %, pas un faux 100 % qui ferait croire que tout
+            // est validé.
+            'percent'  => $total > 0 ? (int) floor($done * 100 / $total) : 0,
+            // Une checklist vide n'est pas « terminée » : elle n'a rien à
+            // terminer. 0 === 0 serait vrai, d'où le garde-fou sur $total.
+            'complete' => $total > 0 && $done === $total,
+        ];
     }
 
     /**
-     * Charge une checklist et vérifie l'accès à son élément parent.
-     * Retourne la ligne checklist si l'accès est autorisé, sinon null.
+     * Recompute and persist the denormalised progress columns.
+     *
+     * THE single recompute point. It is called from PluginChecklistItem's native
+     * post_addItem/post_updateItem/post_purgeItem hooks, so every write path —
+     * toggleStatus, toggleMany, addExceptional, template instantiation, a future
+     * MassiveAction or REST call — is covered without a line of extra code.
+     *
+     * The completion event fires ONLY on the !complete -> complete edge, so a
+     * bulk validation of N tasks still produces exactly one notification.
+     * Writes with _no_history: progress is a derived value, not a user action —
+     * the visible trail is the followup written into the ticket timeline.
      */
-    public static function getCheckedChecklist(int $cl_id, int $right = READ): ?array
+    public static function refreshProgress(int $cl_id): void
+    {
+        if ($cl_id <= 0 || self::$purging) {
+            return;
+        }
+
+        $checklist = new self();
+        if (!$checklist->getFromDB($cl_id)) {
+            // La checklist vient d'être purgée : ses tâches partent avec elle,
+            // il n'y a plus rien à recalculer.
+            return;
+        }
+
+        $was_complete = (int) $checklist->fields['items_total'] > 0
+                        && (int) $checklist->fields['items_done'] === (int) $checklist->fields['items_total'];
+
+        $p = self::computeProgress($cl_id);
+
+        $input = [
+            'id'           => $cl_id,
+            'items_total'  => $p['total'],
+            'items_done'   => $p['done'],
+            'percent_done' => $p['percent'],
+            'status'       => $p['complete'] ? 'done' : 'open',
+            '_no_history'  => true,
+        ];
+        if ($p['complete'] && !$was_complete) {
+            $input['date_completed'] = $_SESSION['glpi_currenttime'] ?? date('Y-m-d H:i:s');
+        }
+
+        $checklist->update($input);
+
+        if ($p['complete'] && !$was_complete) {
+            self::onCompleted($cl_id);
+        }
+    }
+
+    public function isComplete(): bool
+    {
+        return (int) $this->fields['items_total'] > 0
+            && (int) $this->fields['items_done'] === (int) $this->fields['items_total'];
+    }
+
+    /**
+     * Raise the native `checklist_completed` notification.
+     *
+     * Called from refreshProgress() ONLY on the !complete -> complete edge, so a
+     * bulk validation of N tasks yields exactly ONE event — and never during a
+     * purge, because refreshProgress() returns early while self::$purging is
+     * set. That guard is not cosmetic: cleanDBonPurge() cascades the task
+     * deletions BEFORE the checklist row is dropped, so the counters briefly
+     * read done === total on a checklist that is being destroyed. Without it,
+     * deleting a checklist would e-mail people that it had been completed.
+     *
+     * SEPARATE opt-in key, OFF by default. It deliberately does NOT reuse
+     * `notify_on_item_done`: that key means "do not mute the followup", and
+     * overloading it would hand every existing installation a duplicate e-mail
+     * on upgrade — precisely the noise the v1.1.0 bulk aggregation removed.
+     *
+     * Best-effort, exactly like PluginChecklistFollowup::post(): this is a side
+     * channel, and a dead SMTP server must never be able to roll back a
+     * technician ticking a task.
+     */
+    protected static function onCompleted(int $cl_id): void
+    {
+        $cfg = PluginChecklistConfig::get();
+        if ((int) ($cfg['native_notify_on_completed'] ?? 0) !== 1) {
+            return;
+        }
+
+        if (!class_exists('NotificationEvent')) {
+            return;
+        }
+
+        $checklist = new self();
+        if (!$checklist->getFromDB($cl_id)) {
+            return;
+        }
+
+        try {
+            // The event is raised on the CHECKLIST, not on the parent ticket:
+            // NotificationTarget::getInstanceClass() derives the target class
+            // from the item's own type, so raising it on a Ticket would look for
+            // NotificationTargetTicket and never reach this plugin.
+            // Options may carry SCALARS only — they travel through the
+            // notification queue.
+            NotificationEvent::raiseEvent('checklist_completed', $checklist, [
+                'entities_id' => (int) ($checklist->fields['entities_id'] ?? 0),
+            ]);
+        } catch (\Throwable $e) {
+            Toolbox::logWarning('Checklist: completion notification failed - ' . $e->getMessage());
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  TÂCHES OUVERTES D'UN ÉLÉMENT — source unique de la jointure checklist⇄tâche
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Cheap gate for the solve/close veto: how many open tasks belong to a
+     * BLOCKING checklist of this item. Runs on every ITIL update, so it must
+     * stay a COUNT — never a row fetch.
+     *
+     * Exceptional (ad-hoc added) tasks count: the blocking flag lives on the
+     * checklist, not on the individual task.
+     */
+    public static function countBlockingOpen(string $itemtype, int $items_id): int
     {
         global $DB;
 
-        if ($cl_id <= 0) {
-            return null;
+        if ($items_id <= 0 || $itemtype === '') {
+            return 0;
         }
 
-        $row = $DB->request([
-            'FROM'  => static::getTable(),
-            'WHERE' => ['id' => $cl_id],
-        ])->current();
+        $criteria          = self::openItemsQuery([
+            'cl.itemtype'    => $itemtype,
+            'cl.items_id'    => $items_id,
+            'cl.is_blocking' => 1,
+            'it.status'      => 'todo',
+        ]);
+        $criteria['COUNT'] = 'cpt';
 
-        if (!$row) {
-            return null;
+        $row = $DB->request($criteria)->current();
+
+        return (int) ($row['cpt'] ?? 0);
+    }
+
+    /**
+     * Detailed enumeration for the veto message and the validate modal.
+     *
+     * @return array<int, array{checklist_id:int,checklist_name:string,item_id:int,item_name:string,is_exceptional:bool}>
+     */
+    public static function getBlockingOpenItems(string $itemtype, int $items_id): array
+    {
+        if ($items_id <= 0 || $itemtype === '') {
+            return [];
         }
 
-        if (!self::canAccessParent((string) $row['itemtype'], (int) $row['items_id'], $right)) {
-            return null;
+        return self::fetchOpenItems([
+            'cl.itemtype'    => $itemtype,
+            'cl.items_id'    => $items_id,
+            'cl.is_blocking' => 1,
+            'it.status'      => 'todo',
+        ]);
+    }
+
+    /**
+     * Same enumeration WITHOUT the blocking filter: every open task of the
+     * element, whatever its checklist. Feeds ajax/get_todo_items.php — the
+     * validate modal lets the user tick any task, not only the blocking ones.
+     *
+     * @return array<int, array{checklist_id:int,checklist_name:string,item_id:int,item_name:string,is_exceptional:bool}>
+     */
+    public static function getOpenItemsFor(string $itemtype, int $items_id): array
+    {
+        if ($items_id <= 0 || $itemtype === '') {
+            return [];
         }
 
-        return $row;
+        return self::fetchOpenItems([
+            'cl.itemtype' => $itemtype,
+            'cl.items_id' => $items_id,
+            'it.status'   => 'todo',
+        ]);
+    }
+
+    /**
+     * THE single place the checklist ⇄ task join is expressed. Both the COUNT
+     * gate and the two enumerations above build on it, so the join lives in one
+     * spot instead of being re-typed (and drifting) in every caller — it used to
+     * be hand-rolled inside ajax/get_todo_items.php.
+     *
+     * Query-builder criteria, never a raw SQL string: GLPI quotes the aliases
+     * and the values itself, and \Glpi\DBAL is not needed for a plain equi-join.
+     *
+     * @param array<string,mixed> $where alias-qualified filters
+     * @return array<string,mixed>
+     */
+    private static function openItemsQuery(array $where): array
+    {
+        return [
+            'FROM'       => self::getTable() . ' AS cl',
+            'INNER JOIN' => [
+                PluginChecklistItem::getTable() . ' AS it' => [
+                    'ON' => [
+                        'it' => 'plugin_checklist_checklists_id',
+                        'cl' => 'id',
+                    ],
+                ],
+            ],
+            'WHERE'      => $where,
+        ];
+    }
+
+    /**
+     * Runs openItemsQuery() and normalises the rows to the documented shape.
+     *
+     * @param array<string,mixed> $where
+     * @return array<int, array{checklist_id:int,checklist_name:string,item_id:int,item_name:string,is_exceptional:bool}>
+     */
+    private static function fetchOpenItems(array $where): array
+    {
+        global $DB;
+
+        $criteria           = self::openItemsQuery($where);
+        $criteria['SELECT'] = [
+            'cl.id AS checklist_id',
+            'cl.name AS checklist_name',
+            'it.id AS item_id',
+            'it.name AS item_name',
+            'it.is_exceptional AS is_exceptional',
+        ];
+        // Ordre historique de la modale de validation : par checklist, puis dans
+        // l'ordre du kanban « à faire ».
+        $criteria['ORDER'] = ['cl.name ASC', 'it.rank_todo ASC'];
+
+        $rows = [];
+        foreach ($DB->request($criteria) as $row) {
+            $rows[] = [
+                'checklist_id'   => (int) $row['checklist_id'],
+                'checklist_name' => (string) $row['checklist_name'],
+                'item_id'        => (int) $row['item_id'],
+                'item_name'      => (string) $row['item_name'],
+                'is_exceptional' => (bool) $row['is_exceptional'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    public static function deleteChecklist(int $cl_id): bool
+    {
+        // Purge réelle (la table n'a pas de colonne is_deleted) : cleanDBonPurge()
+        // emporte les tâches, post_deleteFromDB() journalise sur l'élément parent.
+        return (bool) (new self())->delete(['id' => $cl_id], true);
+    }
+
+    /**
+     * Les tâches suivent leur checklist. deleteChildrenAndRelationsFromDb()
+     * les supprime par le modèle (CommonDBChild::cleanDBonItemDelete), donc
+     * avec les hooks GLPI — plus de DELETE brut à maintenir.
+     */
+    public function cleanDBonPurge(): void
+    {
+        // Le recalcul est neutralisé le temps de la cascade : voir $purging.
+        // try/finally, pour qu'une exception au milieu d'une suppression ne
+        // laisse pas le plugin avec un recalcul définitivement éteint.
+        self::$purging = true;
+        try {
+            $this->deleteChildrenAndRelationsFromDb([PluginChecklistItem::class]);
+        } finally {
+            self::$purging = false;
+        }
     }
 }

@@ -1,8 +1,6 @@
-
-
 # GLPI Checklist
 
-Плагин для GLPI 11, который добавляет чек-листы к заявкам и другим объектам GLPI.
+Короткий плагин для GLPI 11, который добавляет чек-листы к заявкам и другим объектам GLPI.
 
 ## Возможности
 
@@ -10,9 +8,17 @@
 - шаблоны чек-листов с задачами;
 - Kanban-вид «К выполнению» / «Выполнено»;
 - особые разовые задачи;
-- журнал действий;
+- страница настроек: сообщения, уведомления, список типов объектов;
+- переопределение настроек на уровне отдельного шаблона;
+- журнал действий (штатная история GLPI);
 - автоматическое назначение шаблонов через правила GLPI;
 - уведомления о просроченных задачах через CRON;
+- **колонки чек-листов в поиске по заявкам, изменениям и проблемам**;
+- **поиск, выгрузка и REST API по объектам самого плагина**;
+- **массовое применение шаблона к выбранным объектам**;
+- **запрет решения и закрытия, пока открыты блокирующие задачи** (по умолчанию выключен);
+- **штатное уведомление «Чек-лист выполнен»** (по умолчанию выключено);
+- **прогресс чек-листа отдельным элементом в таймлайне заявки**;
 - переводы: французский, английский, русский.
 
 ## Совместимость
@@ -40,6 +46,202 @@ glpi/plugins/checklist/
 - На объекте GLPI: откройте заявку или устройство, затем вкладку `Чек-листы`.
 - Правила назначения: `Администрирование -> Правила`.
 
+## Настройки
+
+Страница настроек: `Настройка -> Плагины`, шестерёнка **«Настроить»** в строке
+плагина `Checklist`. Для просмотра нужно право `config` на чтение, для сохранения
+- на запись.
+
+### Когда задача чек-листа выполнена
+
+| Параметр | Что делает |
+| --- | --- |
+| `Добавлять наблюдение в заявку` | писать ли сообщение в таймлайн заявки при отметке задачи выполненной |
+| `Видимость наблюдения` | `Как в GLPI` / `Публичное` / `Приватное` |
+| `Отправлять уведомление` | рассылать ли по этому сообщению штатные уведомления GLPI |
+
+### Когда задача чек-листа просрочена
+
+Те же три параметра для сообщений от CRON-задачи `checklistOverdue`.
+По умолчанию такие сообщения приватные.
+
+### Общие
+
+| Параметр | Что делает |
+| --- | --- |
+| `Объединять массовую валидацию в одно наблюдение` | при отметке N задач сразу пишется одно итоговое сообщение на чек-лист, а не N сообщений (и, соответственно, не N писем) |
+| `Типы объектов` | на каких типах GLPI показывать вкладку «Чек-листы». Раньше список был зашит в код |
+
+### Что означает «Как в GLPI»
+
+Видимость сообщения не задаётся плагином, а берётся из **личной настройки
+наблюдений самого техника** (его предпочтение «приватное наблюдение по
+умолчанию»). Это значение по умолчанию для сообщений о выполненной задаче.
+`Публичное` и `Приватное` задают видимость жёстко, независимо от настроек техника.
+
+### Переопределение на уровне шаблона
+
+Шесть параметров сообщений и уведомлений (три для выполненной задачи, три для
+просроченной) можно переопределить в форме конкретного шаблона чек-листа. Каждое
+поле по умолчанию стоит в значении **«Наследовать общую настройку»** - тогда
+действует глобальная настройка. Любое другое значение перекрывает глобальное
+**только для чек-листов,
+созданных по этому шаблону**. Список типов объектов и объединение массовой
+валидации - только глобальные, переопределению не подлежат.
+
+## Поиск и экспорт
+
+### Колонки чек-листов в поиске по заявкам
+
+В поиске по **заявкам, изменениям и проблемам** (`Помощь -> Заявки`, кнопка
+добавления столбца) появляется группа полей чек-листа. Доступны четыре столбца:
+
+| Столбец | Что показывает |
+| --- | --- |
+| `Чек-лист - Название` | название чек-листа, ссылкой на объект |
+| `Чек-лист - Прогресс` | 0-100, число |
+| `Чек-лист - Блокирующий` | да / нет |
+| `Чек-лист - Дата создания` | дата создания чек-листа |
+
+Эти столбцы работают и как **фильтры**: например, «Прогресс < 100» вместе с
+«Блокирующий = да» даёт список заявок, которые сейчас нельзя закрыть.
+
+Два практических момента:
+
+- на одной заявке может быть **несколько чек-листов**. Столбцы сгруппированы
+  (`forcegroupby`), поэтому заявка остаётся одной строкой, а значения
+  перечисляются в ячейке. Без этого поиск размножал бы строки заявок и подсчёты
+  были бы неверными;
+- столбцы видит только тот, у кого есть право `plugin_checklist_checklist` на
+  **чтение**. У профиля без этого права их просто нет в списке полей — и,
+  соответственно, их нельзя вытащить выгрузкой.
+
+### Объекты плагина в поиске и REST API
+
+Все четыре типа плагина - чек-лист, задача чек-листа, шаблон и задача шаблона -
+теперь объявляют свои поисковые опции. Из этого следует:
+
+- их можно искать штатным поиском GLPI и **выгружать** в CSV / PDF / SLK;
+- они доступны через **штатный REST API** GLPI по обычным маршрутам
+  (`/apirest.php/PluginChecklistChecklist`, `/PluginChecklistItem`,
+  `/PluginChecklistTemplate`, `/PluginChecklistTemplateItem`), включая
+  `search`-запросы по тем же полям. Отдельного API плагин не поднимает и
+  собственных токенов не требует - действуют обычные права GLPI.
+
+## Массовое применение шаблона
+
+**Где:** результат поиска по заявкам, изменениям или проблемам -> отметить
+нужные строки -> в списке массовых действий выбрать **«Применить шаблон
+чек-листа»** -> выбрать шаблон -> «Отправить».
+
+**Какое право нужно:**
+
+- чтобы действие вообще появилось в списке - право `plugin_checklist_checklist`
+  на **создание** (CREATE);
+- чтобы шаблон применился к конкретному объекту - право **UPDATE на самом этом
+  объекте**. Строка в результатах поиска сама по себе не даёт полномочий:
+  объекты, на которые прав нет, помечаются как «недостаточно прав», остальные
+  обрабатываются.
+
+**Если шаблон не виден в сущности объекта.** Список шаблонов в форме действия
+строится по **текущей сущности сеанса**, а выборка может охватывать несколько
+сущностей. Поэтому каждый объект дополнительно проверяется отдельно: если
+выбранный шаблон в его сущности не виден, **этот объект возвращает ошибку**, а
+остальные объекты выборки обрабатываются как обычно. Действие не откатывается
+целиком - GLPI покажет сводку по каждому объекту.
+
+Если шаблон не выбран, действие ничего не делает и сообщает об этом: ни один
+объект не помечается обработанным.
+
+## Блокировка закрытия
+
+Плагин может запретить перевод заявки (изменения, проблемы) в **Решена** или
+**Закрыта**, пока в блокирующем чек-листе остаются невыполненные задачи.
+
+### Как включить
+
+Нужны **два** переключателя - глобальный и на уровне шаблона:
+
+1. **Глобально:** `Настройка -> Плагины`, шестерёнка **«Настроить»** у плагина
+   `Checklist`, блок «Общие» -> **«Запрещать решение/закрытие, пока в
+   блокирующем чек-листе есть открытые задачи»** = «Да». По умолчанию **«Нет»**.
+2. **В шаблоне:** `Настройка -> Шаблоны чек-листов`, открыть шаблон ->
+   **«Блокировать решение/закрытие, пока есть невыполненные задачи»** = «Да».
+
+Глобальный переключатель - общий рубильник; сам по себе он ничего не блокирует,
+пока нет ни одного блокирующего шаблона.
+
+### Что видит техник
+
+- при попытке добавить **решение** или сменить **статус** операция отменяется, и
+  вверху страницы появляется сообщение об ошибке: сколько блокирующих задач
+  осталось открытыми и как они называются;
+- изменение остальных полей заявки не затрагивается: запрещён именно **переход**
+  в «Решена» / «Закрыта». Обычное сохранение уже решённой заявки работает.
+
+### Важные оговорки
+
+- **Разовые чек-листы (созданные без шаблона) не блокируют никогда.** Признак
+  «блокирующий» копируется из шаблона в момент создания чек-листа, а без шаблона
+  его негде задать.
+- **Признак фиксируется при создании чек-листа.** Если переключить «блокирующий»
+  в шаблоне, уже созданные по нему чек-листы не изменятся - настройка подействует
+  на новые.
+- **Область действия шире вкладки.** Блокировка распространяется на заявки,
+  изменения и проблемы независимо от списка «Типы объектов»: закрытие должно
+  арбитрироваться везде, даже там, где вкладка «Чек-листы» не показана.
+- **Автоматическое закрытие по CRON тоже блокируется.** Так как сообщение
+  сеанса в CRON читать некому, отказ фиксируется **приватным наблюдением в
+  заявке** - **один раз на заявку**, а не при каждом запуске CRON.
+- ⚠ **Включение затрагивает уже накопленные заявки.** Заявка, уже находящаяся в
+  статусе **Решена**, попадает в **Закрыта** только через настоящий переход
+  Решена -> Закрыта, а он-то и запрещается при незакрытых блокирующих задачах.
+  То есть давно решённые заявки с неполным блокирующим чек-листом станут
+  незакрываемыми сразу после включения настройки. **Перед включением** стоит
+  посмотреть, есть ли такие: чек-листы с `is_blocking = 1` и `percent_done < 100`
+  на уже решённых объектах (это видно и штатным поиском, см. раздел выше).
+
+## Уведомления
+
+Каналов **два, и они независимы**. Их легко перепутать - это разные вещи с
+разными настройками.
+
+### 1. Наблюдение в таймлайне заявки
+
+Сообщение, которое плагин пишет в саму заявку при выполнении (или просрочке)
+задачи. Настраивается **на странице настроек плагина** (`Настройка -> Плагины`,
+шестерёнка «Настроить») и может быть переопределено **в отдельном шаблоне**:
+писать ли наблюдение, его видимость и рассылать ли по нему штатные уведомления
+GLPI. Подробности - в разделе «Настройки» выше.
+
+### 2. Штатное уведомление «Чек-лист выполнен»
+
+Отдельное событие GLPI (`checklist_completed`), которое срабатывает, когда
+чек-лист достигает 100 %.
+
+- **Включение:** страница настроек плагина, блок «Общие» -> **«Отправлять
+  уведомление GLPI при выполнении чек-листа»**. По умолчанию **«Нет»** - чтобы
+  обновление плагина само по себе никому не начало слать почту и не создало
+  дублей с каналом №1.
+- **Текст, получатели и языки:** `Настройка -> Уведомления`. Само уведомление
+  и его шаблон («Чек-лист выполнен» / «Checklist completed» - название
+  сохраняется на языке того, кто ставил плагин) создаются при установке и **редактируются
+  штатными средствами GLPI**, как любое другое уведомление: получатели, режимы
+  отправки, перевод темы и тела на нужные языки.
+
+## Права на каталог public/
+
+Начиная с 1.1.0 CSS и JavaScript отдаются **только** из `public/` внутри плагина
+(так устроен маршрутизатор GLPI 11). Если на каталоге нет бита выполнения,
+ассеты молча отдаются как 404: интерфейс отрисуется, но drag-and-drop и окно
+валидации работать не будут, и в логах сервера ничего внятного не появится.
+
+После распаковки:
+
+```bash
+chmod -R u+rwX,go+rX plugin/checklist/public
+```
+
 ## Состав
 
 - `setup.php` - описание плагина и hooks GLPI;
@@ -54,127 +256,3 @@ glpi/plugins/checklist/
 Плагин проверяет права пользователя на родительский объект GLPI перед AJAX-действиями. SortableJS включен локально, без зависимости от CDN.
 
 Лицензия: GPL v3+.
-
-
-# 📋 GLPI Plugin Checklist
-
-**Des checklists opérationnelles intégrées directement dans vos éléments GLPI.**
-
-[![GLPI](https://img.shields.io/badge/GLPI-11.0.x-2c5a8c?logo=glpi&logoColor=white)](https://glpi-project.org)
-[![PHP](https://img.shields.io/badge/PHP-8.2%2B-777BB4?logo=php&logoColor=white)](https://www.php.net)
-[![License](https://img.shields.io/badge/license-GPL%20v3%2B-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.2-success.svg)](CHANGELOG.md)
-[![FR / EN / RU](https://img.shields.io/badge/i18n-FR%20%2F%20EN%20%2F%20RU-informational.svg)](plugin/checklist/locales)
-
-
-
----
-
-Ce plugin ajoute un onglet **Checklists** à n'importe quel élément GLPI (Tickets, Ordinateurs, Téléphones, etc.). Il permet de créer des checklists à partir de **modèles réutilisables**, de suivre l'avancement des tâches dans une **vue Kanban** (drag & drop), et d'**automatiser** leur association via le moteur de règles GLPI. Les tâches en retard déclenchent des **notifications**.
-
-> 💡 Cas d'usage typique : onboarding d'un collaborateur, déploiement d'un poste, procédure de mise en service d'un équipement…
-
----
-
-## ✨ Fonctionnalités
-
-- 🗂️ **Modèles de checklists réutilisables** — définissez une fois, instanciez partout. Réordonnancement des tâches par glisser-déposer, gestion des entités.
-- 📌 **Onglet Checklist universel** — disponible sur tous les itemtypes GLPI (Ticket, Computer, Phone, Monitor, NetworkEquipment, Printer, Software…).
-- 🔁 **Plusieurs checklists par élément** — chacune avec sa propre barre de progression.
-- 🟦 **Vue Kanban « À faire » / « Fait »** — bascule par clic, réordonnancement par drag & drop (SortableJS).
-- ⚠️ **Tâches exceptionnelles** — ajoutez des actions ad hoc, distinguées visuellement des tâches verrouillées issues du modèle.
-- 📜 **Historique immuable** — qui a fait quoi et quand, par checklist.
-- ⚙️ **Moteur de règles GLPI** — associez automatiquement un modèle à un élément selon son titre, son type, sa catégorie ITIL… (collection de règles native dans *Administration › Règles*).
-- ⏰ **Notifications des tâches en retard** — tâche CRON avec délai configurable par modèle, au choix en **heures / jours / semaines**.
-- 🎫 **Intégration timeline des tickets** — bouton *« Valider une tâche checklist »* + suivi automatique créé quand une tâche est cochée.
-- 🔍 **Sélecteur de modèle avec recherche** à la création d'une checklist.
-- 🌍 **Trilingue FR / EN / RU** dès l'installation.
-- 🔐 **Contrôle d'accès** — chaque action vérifie les droits de l'utilisateur sur l'élément parent (pas d'IDOR).
-
----
-
-## 🧩 Compatibilité
-
-| Composant | Version |
-|-----------|---------|
-| GLPI | **11.0.x** |
-| PHP | **8.2+** |
-| Base de données | MariaDB 10.11 / MySQL 8 |
-
----
-
-## 📦 Installation (en production)
-
-1. Téléchargez la dernière [release](../../releases) ou clonez ce dépôt.
-2. Copiez le dossier **`plugin/checklist/`** dans le répertoire `plugins/` de votre GLPI :
-   ```bash
-   cp -r plugin/checklist /chemin/vers/glpi/plugins/checklist
-   ```
-   > ⚠️ Le dossier doit impérativement s'appeler `checklist`.
-3. Dans GLPI : **Configuration › Plugins** → trouvez **Checklist** → **Installer** puis **Activer**.
-4. (Optionnel) Vérifiez la tâche planifiée dans **Configuration › Actions automatiques** (`checklistOverdue`).
-
----
-
-## 🚀 Utilisation
-
-### Modèles
-**Configuration › Modèles de checklist** → créez un modèle, ajoutez des tâches, choisissez l'entité et le délai de notification (heures / jours / semaines).
-
-### Sur un élément
-Ouvrez un Ticket (ou un Ordinateur…) → onglet **Checklists** → **+ Nouvelle checklist** → choisissez un modèle (recherche intégrée) ou partez d'une checklist vide.
-
-### Automatisation par règles
-**Administration › Règles › Checklist - Règles d'association de checklists** → créez une règle (ex. *« titre du ticket contient SIRH → modèle SIRH »*). La checklist est créée automatiquement à l'ouverture de l'élément.
-
-### Notifications
-Définissez un délai sur le modèle. La tâche CRON `checklistOverdue` (horaire) notifie les tâches dépassant `date_todo + délai` et journalise l'événement.
-
----
-
-## 🗺️ Roadmap
-
-| Phase | Contenu | État |
-|-------|---------|------|
-| 1 | Environnement Docker | ✅ |
-| 2 | Schéma de base de données | ✅ |
-| 3 | Modèles (CRUD) | ✅ |
-| 4 | Onglet Checklist + Kanban | ✅ |
-| 5 | Drag & drop / ordonnancement | ✅ |
-| 6 | Historique | ✅ |
-| 7 | Moteur de règles GLPI | ✅ |
-| 8 | Notifications CRON (tâches en retard) | ✅ |
-| 9 | API REST + tests | ⏳ |
-| 10 | Droits fins par profil | ⏳ |
-
-Détail complet dans [PLAN.md](PLAN.md).
-
----
-
-## 🔐 Sécurité
-
-Tous les endpoints AJAX vérifient les droits de l'utilisateur courant sur l'**élément parent** (`$item->can($id, $right)`), ce qui couvre droit + entité + accès spécifique. Les valeurs dynamiques sont échappées (HTML côté serveur via `htmlspecialchars`, JS via une fonction d'échappement dédiée). Le CSRF s'appuie sur le header `X-Glpi-Csrf-Token` de GLPI 11.
-
-Une faille ? Voir [SECURITY.md](.github/SECURITY.md).
-
----
-
-## 🤝 Contribuer
-
-Les contributions sont les bienvenues ! Consultez [CONTRIBUTING.md](CONTRIBUTING.md) pour l'environnement de dev, les conventions et le workflow i18n.
-
----
-
-## 📄 Licence
-
-Distribué sous licence **GPL v3+**. Voir [LICENSE](LICENSE).
-
-## 👤 Auteur
-
-Développé par **Aprolex**.
-
----
-
-<div align="center">
-<sub>Si ce plugin vous est utile, pensez à ⭐ le dépôt !</sub>
-</div>
